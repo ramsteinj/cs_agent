@@ -18,3 +18,13 @@ export async function saveApiKey(apiKey) {
 export async function deleteApiKey() {
   await client.delete('/admin/settings/api-key')
 }
+
+export async function getRagSettings() {
+  const { data } = await client.get('/admin/settings/rag')
+  return data
+}
+
+export async function updateRagSettings(payload) {
+  const { data } = await client.patch('/admin/settings/rag', payload)
+  return data
+}

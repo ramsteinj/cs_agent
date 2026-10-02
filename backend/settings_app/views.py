@@ -4,9 +4,9 @@ from rest_framework.response import Response
 
 from common.audit import audit
 
-from . import services
+from . import rag, services
 from .models import SystemSetting
-from .serializers import ApiKeySerializer, SystemSettingSerializer
+from .serializers import ApiKeySerializer, RagSettingsSerializer, SystemSettingSerializer
 
 
 @api_view(["GET", "PATCH"])
@@ -35,3 +35,15 @@ def api_key(request):
     setting.set_api_key(key)
     audit("api_key_updated", request.user)
     return Response(SystemSettingSerializer(setting).data)
+
+
+@api_view(["GET", "PATCH"])
+def rag_settings(request):
+    setting = SystemSetting.load()
+    reindexed = None
+    if request.method == "PATCH":
+        serializer = RagSettingsSerializer(setting, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        reindexed = rag.update_rag_settings(serializer, request.user)
+        setting.refresh_from_db()
+    return Response({**RagSettingsSerializer(setting).data, "reindexed_chunks": reindexed})

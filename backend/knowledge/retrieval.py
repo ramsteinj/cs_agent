@@ -1,6 +1,5 @@
 """Vector search over KnowledgeChunk (specs/05-rag-pipeline.md §3)."""
 
-from django.conf import settings
 from pgvector.django import CosineDistance
 
 from . import embeddings
@@ -12,8 +11,12 @@ def search(query_text, top_k=None, max_distance=None):
 
     Chunks farther than max_distance are dropped; each result has a .distance attribute.
     """
-    top_k = settings.RAG_TOP_K if top_k is None else top_k
-    max_distance = settings.RAG_MAX_DISTANCE if max_distance is None else max_distance
+    from settings_app.models import SystemSetting
+
+    if top_k is None or max_distance is None:
+        setting = SystemSetting.load()
+        top_k = setting.retrieval_top_k if top_k is None else top_k
+        max_distance = setting.retrieval_max_distance if max_distance is None else max_distance
     if not query_text or not query_text.strip():
         return []
 

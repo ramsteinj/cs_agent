@@ -11,6 +11,8 @@ ADMIN_ENDPOINTS = [
     ("patch", "/api/admin/settings"),
     ("put", "/api/admin/settings/api-key"),
     ("delete", "/api/admin/settings/api-key"),
+    ("get", "/api/admin/settings/rag"),
+    ("patch", "/api/admin/settings/rag"),
     ("get", "/api/admin/companies"),
     ("post", "/api/admin/companies"),
     ("get", "/api/admin/companies/1"),

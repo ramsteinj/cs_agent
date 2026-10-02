@@ -1,6 +1,9 @@
+import re
+
+from django.conf import settings
 from rest_framework import serializers
 
-from .models import AVAILABLE_MODELS, EXTRA_INSTRUCTIONS_MAX_LENGTH, SystemSetting
+from .models import AVAILABLE_MODELS, EXTRA_INSTRUCTIONS_MAX_LENGTH, RAG_LIMITS, SystemSetting
 
 
 class SystemSettingSerializer(serializers.ModelSerializer):
@@ -44,3 +47,61 @@ class ApiKeySerializer(serializers.Serializer):
         if len(value) < 8 or any(ch.isspace() for ch in value):
             raise serializers.ValidationError("API Key 형식이 올바르지 않습니다.")
         return value
+
+
+def _int_field(name):
+    low, high = RAG_LIMITS[name]
+    return serializers.IntegerField(min_value=low, max_value=high, required=False)
+
+
+class RagSettingsSerializer(serializers.ModelSerializer):
+    """RAG tuning values with the ranges from specs/05 §1.1."""
+
+    embedding_model = serializers.CharField(max_length=200, required=False)
+    embedding_dim = serializers.SerializerMethodField()
+    chunk_max_chars = _int_field("chunk_max_chars")
+    chunk_overlap_chars = _int_field("chunk_overlap_chars")
+    retrieval_top_k = _int_field("retrieval_top_k")
+    retrieval_max_distance = serializers.FloatField(
+        min_value=RAG_LIMITS["retrieval_max_distance"][0],
+        max_value=RAG_LIMITS["retrieval_max_distance"][1],
+        required=False,
+    )
+    history_messages = _int_field("history_messages")
+    max_sources = _int_field("max_sources")
+    llm_max_output_tokens = _int_field("llm_max_output_tokens")
+
+    class Meta:
+        model = SystemSetting
+        fields = [
+            "embedding_model",
+            "embedding_dim",
+            "chunk_max_chars",
+            "chunk_overlap_chars",
+            "retrieval_top_k",
+            "retrieval_max_distance",
+            "search_with_previous_question",
+            "history_messages",
+            "max_sources",
+            "llm_max_output_tokens",
+        ]
+
+    def get_embedding_dim(self, obj):
+        return settings.EMBEDDING_DIM
+
+    def validate_embedding_model(self, value):
+        value = value.strip()
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", value):
+            raise serializers.ValidationError(
+                "모델 이름 형식이 올바르지 않습니다. (예: intfloat/multilingual-e5-small)"
+            )
+        return value
+
+    def validate(self, attrs):
+        max_chars = attrs.get("chunk_max_chars", self.instance.chunk_max_chars)
+        overlap = attrs.get("chunk_overlap_chars", self.instance.chunk_overlap_chars)
+        if overlap >= max_chars:
+            raise serializers.ValidationError(
+                {"chunk_overlap_chars": ["청크 겹침은 청크 최대 길이보다 작아야 합니다."]}
+            )
+        return attrs

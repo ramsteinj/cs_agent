@@ -54,15 +54,17 @@ def session_full(session):
 # --- Prompt inputs -----------------------------------------------------------
 
 
-def history_messages(session, before_id):
+def history_messages(session, before_id, limit):
     """Last N successful messages before the current turn, as Claude message params.
 
     Failed turns are stored with status=error on both sides and skipped, so roles
     alternate. The list always starts with a user turn.
     """
+    if limit <= 0:
+        return []
     recent = list(
         session.messages.filter(status=ChatMessage.Status.OK, id__lt=before_id).order_by("-id")[
-            : settings.CHAT_HISTORY_MESSAGES
+            :limit
         ]
     )
     recent.reverse()
@@ -71,8 +73,10 @@ def history_messages(session, before_id):
     return [{"role": m.role, "content": m.content} for m in recent if m.content]
 
 
-def search_query(session, question, before_id):
-    """Current question + the previous user question, so follow-ups keep context."""
+def search_query(session, question, before_id, with_previous=True):
+    """Current question (+ the previous user question, so follow-ups keep context)."""
+    if not with_previous:
+        return question
     previous = (
         session.messages.filter(role=ChatMessage.Role.USER, id__lt=before_id)
         .order_by("-id")
@@ -82,9 +86,11 @@ def search_query(session, question, before_id):
     return f"{previous}\n{question}" if previous else question
 
 
-def sources_for(chunks):
-    """Unique sources in relevance order, at most CHAT_MAX_SOURCES."""
+def sources_for(chunks, limit):
+    """Unique sources in relevance order, at most `limit`."""
     sources, seen = [], set()
+    if limit <= 0:
+        return sources
     for chunk in chunks:
         key = (chunk.source_type, chunk.source_id)
         if key in seen:
@@ -92,12 +98,12 @@ def sources_for(chunks):
         seen.add(key)
         title = chunk.product.name if chunk.product_id else chunk.company.name
         sources.append({"type": chunk.source_type, "id": chunk.source_id, "title": title})
-        if len(sources) == settings.CHAT_MAX_SOURCES:
+        if len(sources) == limit:
             break
     return sources
 
 
-def sources_from_ids(chunk_ids):
+def sources_from_ids(chunk_ids, limit):
     """Rebuild sources for stored messages; chunks re-created by later edits are skipped."""
     chunks = {
         c.pk: c
@@ -105,7 +111,7 @@ def sources_from_ids(chunk_ids):
             "company", "product"
         )
     }
-    return sources_for([chunks[i] for i in chunk_ids if i in chunks])
+    return sources_for([chunks[i] for i in chunk_ids if i in chunks], limit)
 
 
 # --- Turn --------------------------------------------------------------------
@@ -131,13 +137,18 @@ def answer_stream(session, question):
 
     streamed = []
     try:
-        chunks = search(search_query(session, question, user_message.pk))
+        query = search_query(
+            session, question, user_message.pk, setting.search_with_previous_question
+        )
+        chunks = search(query)
         assistant.retrieved_chunk_ids = [c.pk for c in chunks]
-        messages = history_messages(session, user_message.pk)
+        messages = history_messages(session, user_message.pk, setting.history_messages)
         messages.append({"role": "user", "content": build_user_content(question, chunks)})
         system = build_system_prompt(setting.bot_name, setting.extra_instructions)
 
-        replies = llm.stream_reply(api_key, setting.claude_model, system, messages)
+        replies = llm.stream_reply(
+            api_key, setting.claude_model, system, messages, setting.llm_max_output_tokens
+        )
         while True:
             try:
                 text = next(replies)
@@ -163,7 +174,8 @@ def answer_stream(session, question):
     assistant.output_tokens = final.output_tokens
     assistant.save()
 
-    done = {"type": "done", "sources": [] if final.refused else sources_for(chunks)}
+    sources = [] if final.refused else sources_for(chunks, setting.max_sources)
+    done = {"type": "done", "sources": sources}
     if final.text != "".join(streamed):
         # e.g. refusal after partial output: the client must replace what it showed.
         done["replace_text"] = final.text
@@ -180,6 +192,7 @@ def _mark_failed(user_message, assistant, partial_text):
 
 def public_messages(session):
     """Messages for restoring the chat after a page reload."""
+    limit = SystemSetting.load().max_sources
     result = []
     for message in session.messages.filter(~Q(content="") | Q(status=ChatMessage.Status.ERROR)):
         item = {
@@ -190,6 +203,6 @@ def public_messages(session):
             "created_at": message.created_at,
         }
         if message.role == ChatMessage.Role.ASSISTANT:
-            item["sources"] = sources_from_ids(message.retrieved_chunk_ids)
+            item["sources"] = sources_from_ids(message.retrieved_chunk_ids, limit)
         result.append(item)
     return result

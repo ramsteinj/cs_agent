@@ -16,8 +16,16 @@ def _fake_reply(deltas, final_text=None, refused=False, error=None):
     """Replacement for llm.stream_reply recording its inputs."""
     calls = []
 
-    def stream_reply(api_key, model, system, messages):
-        calls.append({"api_key": api_key, "model": model, "system": system, "messages": messages})
+    def stream_reply(api_key, model, system, messages, max_output_tokens):
+        calls.append(
+            {
+                "api_key": api_key,
+                "model": model,
+                "system": system,
+                "messages": messages,
+                "max_output_tokens": max_output_tokens,
+            }
+        )
         yield from deltas
         if error:
             raise error
@@ -45,10 +53,14 @@ def enabled(db):
     return setting
 
 
+def _set(**fields):
+    SystemSetting.objects.filter(pk=1).update(**fields)
+
+
 @pytest.fixture
-def loose_retrieval(settings):
+def loose_retrieval(enabled):
     # Fake hashing embeddings are not calibrated like e5; accept any distance.
-    settings.RAG_MAX_DISTANCE = 2.0
+    _set(retrieval_max_distance=2.0)
 
 
 @pytest.fixture
@@ -140,6 +152,7 @@ class TestStreaming:
         call = calls[0]
         assert call["api_key"] == "sk-ant-api03-test-secret-WXYZ"
         assert call["model"] == "claude-opus-5-5"
+        assert call["max_output_tokens"] == 4096
         assert call["messages"][-1]["role"] == "user"
         assert call["messages"][-1]["content"].startswith("<context>")
         assert "고객 질문: 오케이드라이브 가격이 얼마예요?" in call["messages"][-1]["content"]
@@ -158,8 +171,8 @@ class TestStreaming:
         assert '"OK봇"' in calls[0]["system"]
         assert calls[0]["system"].endswith("반말 금지")
 
-    def test_history_is_plain_text_and_limited(self, client, enabled, session, settings):
-        settings.CHAT_HISTORY_MESSAGES = 4
+    def test_history_is_plain_text_and_limited(self, client, enabled, session):
+        _set(history_messages=4)
         for i in range(4):
             ChatMessage.objects.create(session=session, role="user", content=f"질문{i}")
             ChatMessage.objects.create(session=session, role="assistant", content=f"답변{i}")
@@ -257,3 +270,46 @@ class TestSessions:
 
     def test_unknown_session_messages_404(self, client):
         assert client.get(f"/api/chat/sessions/{uuid.uuid4()}/messages").status_code == 404
+
+
+@pytest.mark.django_db
+class TestRagSettingsApplied:
+    """RAG tuning values are read from the DB on every turn (specs/05 §1.1)."""
+
+    def test_history_disabled_and_output_tokens(self, client, enabled, session):
+        _set(history_messages=0, llm_max_output_tokens=1000)
+        ChatMessage.objects.create(session=session, role="user", content="이전")
+        ChatMessage.objects.create(session=session, role="assistant", content="답")
+        reply, calls = _fake_reply(["네"])
+
+        with mock.patch("chat.services.llm.stream_reply", reply):
+            _events(_send(client, session))
+
+        assert len(calls[0]["messages"]) == 1
+        assert calls[0]["max_output_tokens"] == 1000
+
+    def test_search_without_previous_question(self, client, enabled, session):
+        _set(search_with_previous_question=False)
+        ChatMessage.objects.create(session=session, role="user", content="오케이드라이브")
+        ChatMessage.objects.create(session=session, role="assistant", content="...")
+        reply, _ = _fake_reply(["네"])
+
+        with (
+            mock.patch("chat.services.llm.stream_reply", reply),
+            mock.patch("chat.services.search", return_value=[]) as search,
+        ):
+            _events(_send(client, session, "가격은?"))
+
+        assert search.call_args.args[0] == "가격은?"
+
+    def test_max_sources(self, client, enabled, session, loose_retrieval):
+        company = make_company()
+        for i in range(3):
+            make_product(company, name=f"제품{i}", description="오케이드라이브 가격 안내")
+        _set(max_sources=1)
+        reply, _ = _fake_reply(["네"])
+
+        with mock.patch("chat.services.llm.stream_reply", reply):
+            events = _events(_send(client, session, "오케이드라이브 가격"))
+
+        assert len(events[-1]["sources"]) == 1

@@ -9,7 +9,6 @@ from common.anthropic_errors import describe_api_error
 
 logger = logging.getLogger(__name__)
 
-MAX_TOKENS = 4096
 TIMEOUT_SECONDS = 60
 MAX_RETRIES = 2
 # Customer-support chat does well at low effort and answers faster (specs/05 §4.1).
@@ -36,10 +35,10 @@ class FinalReply:
     refused: bool = False
 
 
-def _request_params(model, system, messages):
+def _request_params(model, system, messages, max_output_tokens):
     params = {
         "model": model,
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": max_output_tokens,
         "system": system,
         "messages": messages,
     }
@@ -53,14 +52,15 @@ def _request_params(model, system, messages):
     return params
 
 
-def stream_reply(api_key, model, system, messages):
+def stream_reply(api_key, model, system, messages, max_output_tokens=4096):
     """Yield text deltas, then return a FinalReply (use `yield from` to get it).
 
     Raises LLMError on any API failure.
     """
     client = anthropic.Anthropic(api_key=api_key, timeout=TIMEOUT_SECONDS, max_retries=MAX_RETRIES)
     try:
-        with client.beta.messages.stream(**_request_params(model, system, messages)) as stream:
+        params = _request_params(model, system, messages, max_output_tokens)
+        with client.beta.messages.stream(**params) as stream:
             for text in stream.text_stream:
                 yield text
             final = stream.get_final_message()

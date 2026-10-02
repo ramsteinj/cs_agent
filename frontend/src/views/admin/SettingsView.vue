@@ -6,11 +6,12 @@ import * as knowledgeApi from '@/api/knowledge'
 import * as settingsApi from '@/api/settings'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import LoadingButton from '@/components/LoadingButton.vue'
+import RagSettingsCard from '@/components/RagSettingsCard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useToastStore } from '@/stores/toast'
 
-// Cards: API Key, chatbot settings, knowledge index, password (specs/06 §5.5).
+// Cards: API Key, chatbot settings, RAG settings, knowledge index, password (specs/06 §5.5).
 const EXTRA_MAX = 2000
 
 const auth = useAuthStore()
@@ -308,7 +309,10 @@ async function changePassword() {
       </div>
     </template>
 
-    <!-- 3. Knowledge index -->
+    <!-- 3. RAG tuning (stored in the DB) -->
+    <RagSettingsCard @reindexed="loadStats" />
+
+    <!-- 4. Knowledge index -->
     <div class="card mb-4" data-test="index-card">
       <div class="card-header">지식 색인</div>
       <div class="card-body">
@@ -338,7 +342,7 @@ async function changePassword() {
       </div>
     </div>
 
-    <!-- 4. Password (available even if settings failed to load) -->
+    <!-- 5. Password (available even if settings failed to load) -->
     <div class="card" data-test="password-card">
       <div class="card-header">비밀번호 변경</div>
       <form class="card-body" novalidate @submit.prevent="changePassword">

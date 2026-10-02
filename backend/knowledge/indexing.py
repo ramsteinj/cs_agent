@@ -6,7 +6,6 @@ embedding failure rolls back the whole change.
 
 import logging
 
-from django.conf import settings
 from django.db import connection, transaction
 from rest_framework import status
 
@@ -29,14 +28,20 @@ def _embedding_error():
     )
 
 
+def _chunk_settings():
+    from settings_app.models import SystemSetting
+
+    setting = SystemSetting.load()
+    return setting.chunk_max_chars, setting.chunk_overlap_chars
+
+
 def _make_chunks(source_type, source, company, product, header, body, searchable):
-    texts = chunk_text(
-        header, body, max_chars=settings.CHUNK_MAX_CHARS, overlap=settings.CHUNK_OVERLAP_CHARS
-    )
+    max_chars, overlap = _chunk_settings()
+    texts = chunk_text(header, body, max_chars=max_chars, overlap=overlap)
     try:
         vectors = embeddings.embed_passages(texts)
         model_name = embeddings.model_name()
-    except embeddings.EmbeddingError:
+    except embeddings.EmbeddingError:  # ImproperlyConfigured (wrong dimension) propagates
         logger.exception("Embedding failed for %s:%s", source_type, source.pk)
         raise _embedding_error() from None
     return [

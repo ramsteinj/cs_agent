@@ -110,21 +110,15 @@ REST_FRAMEWORK = {
 # Validated at startup by settings_app (missing/invalid -> ImproperlyConfigured).
 FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default="")
 
-# RAG / embeddings (specs/05-rag-pipeline.md). EMBEDDING_DIM must match the migration.
+# Embeddings. RAG tuning values (model, chunking, retrieval, history...) live in the DB
+# (SystemSetting) and are edited in the admin UI (specs/05 §1.1).
 EMBEDDING_BACKEND = env("EMBEDDING_BACKEND", default="sentence_transformers")  # or "fake"
-EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="intfloat/multilingual-e5-small")
-EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=384)
-RAG_TOP_K = env.int("RAG_TOP_K", default=5)
-RAG_MAX_DISTANCE = env.float("RAG_MAX_DISTANCE", default=0.6)
-CHUNK_MAX_CHARS = 500
-CHUNK_OVERLAP_CHARS = 100
+EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=384)  # VectorField size: needs a migration
 
-# Chat (specs/05 §4.2, specs/07 §4)
-CHAT_HISTORY_MESSAGES = 10
+# Chat input / abuse limits (specs/07 §4)
 CHAT_MESSAGE_MAX_LENGTH = 1000
 CHAT_IP_RATE_PER_MINUTE = 20
 CHAT_SESSION_MAX_MESSAGES = 200
-CHAT_MAX_SOURCES = 3
 
 # Login lockout policy (specs/07-security.md §2)
 LOGIN_MAX_FAILED_ATTEMPTS = 5

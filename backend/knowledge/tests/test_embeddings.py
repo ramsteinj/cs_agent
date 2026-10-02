@@ -32,11 +32,16 @@ def test_unknown_backend_is_rejected(settings):
         embeddings.get_embedder()
 
 
-def test_sentence_transformer_adds_e5_prefixes():
-    embedder = SentenceTransformerEmbedder("some-model", 3)
+def _with_fake_model(name):
+    embedder = SentenceTransformerEmbedder(name, 3)
     model = mock.Mock()
     model.encode.return_value = [mock.Mock(tolist=lambda: [1.0, 0.0, 0.0])]
     embedder._model = model
+    return embedder, model
+
+
+def test_e5_models_get_query_and_passage_prefixes():
+    embedder, model = _with_fake_model("intfloat/multilingual-e5-small")
 
     embedder.embed_query("질문")
     assert model.encode.call_args.args[0] == ["query: 질문"]
@@ -44,6 +49,27 @@ def test_sentence_transformer_adds_e5_prefixes():
 
     embedder.embed_passages(["문서"])
     assert model.encode.call_args.args[0] == ["passage: 문서"]
+
+
+def test_other_models_get_no_prefix():
+    embedder, model = _with_fake_model(
+        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    )
+
+    embedder.embed_query("질문")
+    assert model.encode.call_args.args[0] == ["질문"]
+
+
+def test_embedder_follows_the_db_model(settings, db):
+    from settings_app.models import SystemSetting
+
+    settings.EMBEDDING_BACKEND = "sentence_transformers"
+    SystemSetting.load()  # make sure the singleton row exists
+    SystemSetting.objects.filter(pk=1).update(embedding_model="org/model-a")
+
+    assert embeddings.get_embedder().model_name == "org/model-a"
+    SystemSetting.objects.filter(pk=1).update(embedding_model="org/model-b")
+    assert embeddings.get_embedder().model_name == "org/model-b"
 
 
 def test_dimension_mismatch_fails_with_clear_error():

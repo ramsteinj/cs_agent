@@ -5,6 +5,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from common.audit import audit
+from settings_app.models import SystemSetting
 
 from . import services
 from .indexing import reindex_all
@@ -90,7 +91,7 @@ def reindex(request):
 
 @api_view(["GET"])
 def stats(request):
-    model = "fake" if settings.EMBEDDING_BACKEND == "fake" else settings.EMBEDDING_MODEL
+    model = "fake" if settings.EMBEDDING_BACKEND == "fake" else SystemSetting.load().embedding_model
     return Response(
         {
             "companies": Company.objects.count(),

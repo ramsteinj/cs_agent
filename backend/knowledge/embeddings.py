@@ -44,11 +44,15 @@ class FakeEmbedder:
 
 
 class SentenceTransformerEmbedder:
-    """e5 models need "passage: " / "query: " prefixes and normalized output."""
+    """Normalized sentence-transformers embeddings.
+
+    e5 models (name contains "e5") need "passage: " / "query: " prefixes; others don't.
+    """
 
     def __init__(self, model_name, dim):
         self.model_name = model_name
         self.dim = dim
+        self.uses_e5_prefixes = "e5" in model_name.lower()
         self._model = None
         self._lock = threading.Lock()
 
@@ -86,33 +90,52 @@ class SentenceTransformerEmbedder:
         return [v.tolist() for v in vectors]
 
     def embed_passages(self, texts):
-        return self._encode([f"passage: {t}" for t in texts])
+        prefix = "passage: " if self.uses_e5_prefixes else ""
+        return self._encode([f"{prefix}{t}" for t in texts])
 
     def embed_query(self, text):
-        return self._encode([f"query: {text}"])[0]
+        prefix = "query: " if self.uses_e5_prefixes else ""
+        return self._encode([f"{prefix}{text}"])[0]
+
+    def load(self):
+        """Load now (used to validate a new model before saving the setting)."""
+        self._get_model()
 
 
-_embedders = {}
+# Only the current model stays in memory; switching models drops the previous one.
+_current = {"key": None, "embedder": None}
 _embedders_lock = threading.Lock()
 
 
-def get_embedder():
-    """Process-wide embedder for the configured backend (lazy singleton)."""
-    key = (settings.EMBEDDING_BACKEND, settings.EMBEDDING_MODEL, settings.EMBEDDING_DIM)
+def configured_model_name():
+    from settings_app.models import SystemSetting
+
+    return SystemSetting.load().embedding_model
+
+
+def get_embedder(model_name=None):
+    """Process-wide embedder for the configured backend and DB model (lazy)."""
+    backend, dim = settings.EMBEDDING_BACKEND, settings.EMBEDDING_DIM
+    if backend == "fake":
+        model_name = "fake"
+    elif backend == "sentence_transformers":
+        model_name = model_name or configured_model_name()
+    else:
+        raise ImproperlyConfigured(f"Unknown EMBEDDING_BACKEND: {backend}")
+    key = (backend, model_name, dim)
     with _embedders_lock:
-        if key not in _embedders:
-            backend, model_name, dim = key
-            if backend == "fake":
-                _embedders[key] = FakeEmbedder(dim)
-            elif backend == "sentence_transformers":
-                _embedders[key] = SentenceTransformerEmbedder(model_name, dim)
-            else:
-                raise ImproperlyConfigured(f"Unknown EMBEDDING_BACKEND: {backend}")
-        return _embedders[key]
+        if _current["key"] != key:
+            embedder = (
+                FakeEmbedder(dim)
+                if backend == "fake"
+                else SentenceTransformerEmbedder(model_name, dim)
+            )
+            _current.update(key=key, embedder=embedder)
+        return _current["embedder"]
 
 
-def embed_passages(texts):
-    return get_embedder().embed_passages(texts)
+def embed_passages(texts, model_name=None):
+    return get_embedder(model_name).embed_passages(texts)
 
 
 def embed_query(text):

@@ -19,6 +19,8 @@ vi.mock('@/api/settings', () => ({
   updateSettings: vi.fn(),
   saveApiKey: vi.fn(),
   deleteApiKey: vi.fn(),
+  getRagSettings: vi.fn(() => new Promise(() => {})), // RAG card has its own spec
+  updateRagSettings: vi.fn(),
 }))
 vi.mock('@/api/chat', () => ({ fetchStatus: vi.fn() }))
 vi.mock('@/api/knowledge', () => ({ getStats: vi.fn(), reindex: vi.fn() }))
@@ -63,6 +65,7 @@ describe('SettingsView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.resetAllMocks() // also drops queued *Once values left by a previous test
+    settingsApi.getRagSettings.mockReturnValue(new Promise(() => {}))
     chatApi.fetchStatus.mockResolvedValue({ enabled: true, bot_name: 'x', welcome_message: 'y' })
     knowledgeApi.getStats.mockResolvedValue(STATS)
     document.body.innerHTML = ''
