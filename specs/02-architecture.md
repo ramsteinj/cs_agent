@@ -90,7 +90,7 @@ frontend/
     ├── App.vue              # 상단 네비게이션(우측 로그인)
     ├── router/index.js
     ├── stores/              # auth.js, chat.js, toast.js(알림)
-    ├── api/                 # client.js(axios), auth.js, knowledge.js, chat.js, settings.js
+    ├── api/                 # client.js(axios), auth.js, knowledge.js, chat.js, settings.js, sse.js(SSE 파서)
     ├── views/               # ChatView, admin/*View
     ├── components/          # LoginModal, ChatMessage, ChatInput, ConfirmDialog ...
     └── composables/         # useUnsavedGuard (폼 이탈 확인)

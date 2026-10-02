@@ -4,7 +4,7 @@
 """
 
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from rest_framework import exceptions, status
 from rest_framework.views import exception_handler
 
@@ -87,3 +87,12 @@ def api_exception_handler(exc, context):
 
     response.data = _error_body(code, message, details)
     return response
+
+
+def error_json(code, message, status_code, details=None):
+    """Common-format error for plain Django views (e.g. the SSE chat endpoint)."""
+    return JsonResponse(
+        _error_body(code, message, details),
+        status=status_code,
+        json_dumps_params={"ensure_ascii": False},
+    )

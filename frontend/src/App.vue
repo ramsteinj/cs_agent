@@ -81,7 +81,8 @@ async function logout() {
       </div>
     </nav>
 
-    <main class="flex-grow-1">
+    <!-- min-height: 0 lets the chat message list scroll inside the viewport -->
+    <main class="flex-grow-1 overflow-auto app-main">
       <RouterView />
     </main>
 

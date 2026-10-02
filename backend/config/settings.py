@@ -115,6 +115,13 @@ RAG_MAX_DISTANCE = env.float("RAG_MAX_DISTANCE", default=0.6)
 CHUNK_MAX_CHARS = 500
 CHUNK_OVERLAP_CHARS = 100
 
+# Chat (specs/05 §4.2, specs/07 §4)
+CHAT_HISTORY_MESSAGES = 10
+CHAT_MESSAGE_MAX_LENGTH = 1000
+CHAT_IP_RATE_PER_MINUTE = 20
+CHAT_SESSION_MAX_MESSAGES = 200
+CHAT_MAX_SOURCES = 3
+
 # Login lockout policy (specs/07-security.md §2)
 LOGIN_MAX_FAILED_ATTEMPTS = 5
 LOGIN_LOCK_MINUTES = 5
@@ -131,5 +138,6 @@ LOGGING = {
         "accounts": {"handlers": ["console"], "level": "INFO"},
         "settings_app": {"handlers": ["console"], "level": "INFO"},
         "knowledge": {"handlers": ["console"], "level": "INFO"},
+        "chat": {"handlers": ["console"], "level": "INFO"},
     },
 }

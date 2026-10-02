@@ -40,7 +40,7 @@ PostgreSQL 18 + pgvector
 | 2 | 계정 (로그인, 기본 관리자, 비밀번호 변경) | ✅ 완료 |
 | 3 | 시스템 설정 (API Key 암호화 저장, 챗봇 설정, 채팅 활성 상태) | ✅ 완료 |
 | 4 | 지식 관리 (회사/제품 CRUD, 임베딩·pgvector 색인, 검색, 재색인) | ✅ 완료 |
-| 5 | 챗봇 (RAG + Claude 스트리밍) | ⏳ 예정 |
+| 5 | 챗봇 (RAG + Claude 스트리밍, 채팅 UI) | ✅ 완료 |
 | 6 | 마무리 | ⏳ 예정 |
 
 ## 실행 방법
@@ -83,7 +83,15 @@ npm install
 npm run dev                         # /api 요청은 Django(8000)로 프록시
 ```
 
-브라우저에서 http://localhost:5173 을 열면 채팅 화면이 표시됩니다. API Key가 등록되기 전에는 "현재 상담 서비스를 준비 중입니다."가 표시되고 입력창이 비활성화됩니다. 질문 전송과 답변은 Phase 5에서 구현됩니다.
+브라우저에서 http://localhost:5173 을 열면 채팅 화면이 표시됩니다. API Key가 등록되기 전에는 "현재 상담 서비스를 준비 중입니다."가 표시되고 입력창이 비활성화됩니다.
+
+### 고객 채팅
+
+- 로그인 없이 질문하면 등록된 회사·제품 정보에서 관련 내용을 검색해 Claude가 답변을 스트리밍으로 보여 줍니다. 답변 아래에 참고한 회사·제품이 표시됩니다.
+- Enter 전송, Shift+Enter 줄바꿈, 최대 1,000자. 같은 탭에서는 새로고침해도 대화가 유지되고, **새 대화** 버튼으로 초기화합니다.
+- 직전 대화(최대 10개 메시지)를 함께 보내 "그거 가격은?" 같은 후속 질문을 이해합니다.
+- 오류 시 "다시 시도" 버튼이 표시됩니다. IP당 분당 20회, 대화당 200개 메시지로 제한됩니다.
+- 서버 시작 후 첫 질문은 임베딩 모델을 메모리에 올리느라 수 초 더 걸립니다.
 
 ### 관리자 로그인
 
@@ -124,7 +132,7 @@ cs_agent/
 │   ├── common/          # 공통 에러 형식, 권한(IsAdminRole), 페이지네이션, health API
 │   ├── accounts/        # User(AbstractUser + role), 로그인/로그아웃/비밀번호 변경, 기본 관리자 생성
 │   ├── knowledge/       # 회사·제품 CRUD, 청킹·임베딩·pgvector 색인, 벡터 검색
-│   ├── chat/            # 챗봇 상태 API (메시지/RAG는 Phase 5)
+│   ├── chat/            # 챗봇 상태·세션·SSE 메시지 API, RAG 오케스트레이션, Claude 호출(llm.py)
 │   └── settings_app/    # SystemSetting: 암호화된 API Key, 모델·챗봇 설정
 └── frontend/            # Vue 3 + Vite + Bootstrap 5.0 SPA
     └── src/             # api/, router/, views/, assets/

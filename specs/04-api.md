@@ -172,6 +172,8 @@ data: {"type": "done", "sources": [{"type": "product", "id": 10, "title": "OK클
 ```
 오류 발생 시: `data: {"type": "error", "code": "LLM_ERROR", "message": "일시적인 오류가 발생했습니다..."}` 후 스트림 종료.
 
+`done` 이벤트에 `replace_text`가 있으면 클라이언트는 지금까지 표시한 delta 대신 그 텍스트로 답변을 교체한다 (예: 일부 출력 후 거절(refusal)된 경우 안내 문구로 교체). 이때 `sources`는 빈 배열이다.
+
 - 스트리밍 시작 **전**에 검출되는 오류(검증 실패, 챗봇 비활성, 존재하지 않는 세션, rate limit)는 일반 JSON 에러 응답(공통 포맷)으로 반환한다.
 - 존재하지 않는 `session_id` → 404. 세션은 프론트가 `POST /api/chat/sessions`로 먼저 생성한다.
 - 구현: DRF 뷰가 아닌 Django `StreamingHttpResponse` 기반 함수 뷰 + `X-Accel-Buffering: no` 헤더. 입력 검증은 DRF Serializer 재사용.
