@@ -1,36 +1,53 @@
+"""LLM provider key validation and model listing for the admin API (specs/04 §6)."""
+
 import logging
 
-import anthropic
 from rest_framework import status
 
-from common.anthropic_errors import describe_api_error
+import llm
 from common.exceptions import ApiError
 
 logger = logging.getLogger(__name__)
 
-VALIDATION_TIMEOUT_SECONDS = 15
+INVALID_KEY_MESSAGE = "유효하지 않은 API Key입니다."
+UNREACHABLE_MESSAGE = "LLM API에 연결할 수 없어 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
 
 
-def validate_api_key(api_key: str):
-    """Check the key against the Anthropic API with one cheap call (specs/01 F-A6).
+def _unreachable():
+    return ApiError("LLM_ERROR", UNREACHABLE_MESSAGE, status.HTTP_502_BAD_GATEWAY)
 
-    Raises ApiError INVALID_API_KEY (400) when Anthropic rejects the key, or
-    LLM_ERROR (502) when the check could not be completed. Exception text is never
-    exposed or logged because it may echo part of the key.
+
+def validate_api_key(provider, api_key):
+    """One cheap provider call. Raises ApiError INVALID_API_KEY (400) or LLM_ERROR (502).
+
+    Log lines carry only status / error type / request ID (never the key).
     """
-    client = anthropic.Anthropic(api_key=api_key, max_retries=1, timeout=VALIDATION_TIMEOUT_SECONDS)
     try:
-        client.models.list(limit=1)
-    except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
-        logger.info("API Key rejected by Anthropic: %s", describe_api_error(exc))
+        llm.get_provider(provider).validate_key(api_key)
+    except llm.InvalidAPIKey as exc:
+        logger.info("%s API Key rejected: %s", provider, exc)
         raise ApiError(
-            "INVALID_API_KEY", "유효하지 않은 API Key입니다.", status.HTTP_400_BAD_REQUEST
+            "INVALID_API_KEY", INVALID_KEY_MESSAGE, status.HTTP_400_BAD_REQUEST
         ) from None
-    except anthropic.APIError as exc:
-        logger.warning("API Key validation failed: %s", describe_api_error(exc))
+    except llm.LLMError as exc:
+        logger.warning("%s API Key validation failed: %s", provider, exc)
+        raise _unreachable() from None
+
+
+def list_models(config):
+    """Selectable models. Claude falls back to its recommended list without a key."""
+    spec = config.spec
+    api_key = config.get_api_key()
+    if api_key is None:
+        if spec.recommended_models:
+            return list(spec.recommended_models)
         raise ApiError(
-            "LLM_ERROR",
-            "Anthropic API에 연결할 수 없어 API Key를 확인하지 못했습니다. "
-            "잠시 후 다시 시도해 주세요.",
-            status.HTTP_502_BAD_GATEWAY,
-        ) from None
+            "API_KEY_REQUIRED",
+            f"{spec.label} API Key를 먼저 등록해 주세요.",
+            status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        return spec.list_models(api_key)
+    except llm.LLMError as exc:
+        logger.warning("%s model listing failed: %s", config.provider, exc)
+        raise _unreachable() from None

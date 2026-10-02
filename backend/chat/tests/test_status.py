@@ -1,6 +1,6 @@
 import pytest
 
-from settings_app.models import SystemSetting
+from settings_app.models import LLMProviderConfig, SystemSetting
 
 
 @pytest.mark.django_db
@@ -19,7 +19,8 @@ def test_status_disabled_without_api_key(api_client):
 def test_status_enabled_with_api_key(api_client):
     setting = SystemSetting.load()
     setting.bot_name = "OK 상담봇"
-    setting.set_api_key("sk-ant-api03-test-secret-value-WXYZ")
+    setting.save()
+    LLMProviderConfig.get("anthropic").set_api_key("sk-ant-api03-test-secret-value-WXYZ")
 
     body = api_client.get("/api/chat/status").json()
 

@@ -17,29 +17,52 @@ vi.mock('@/api/auth', () => ({
 vi.mock('@/api/settings', () => ({
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
-  saveApiKey: vi.fn(),
-  deleteApiKey: vi.fn(),
-  getRagSettings: vi.fn(() => new Promise(() => {})), // RAG card has its own spec
+  saveProviderKey: vi.fn(),
+  deleteProviderKey: vi.fn(),
+  updateProviderModel: vi.fn(),
+  listProviderModels: vi.fn(),
+  getRagSettings: vi.fn(),
   updateRagSettings: vi.fn(),
 }))
 vi.mock('@/api/chat', () => ({ fetchStatus: vi.fn() }))
 vi.mock('@/api/knowledge', () => ({ getStats: vi.fn(), reindex: vi.fn() }))
 
+const PROVIDERS = [
+  {
+    provider: 'anthropic',
+    label: 'Claude',
+    api_key_configured: false,
+    api_key_masked: '',
+    api_key_updated_at: null,
+    model: 'claude-opus-5-5',
+    default_model: 'claude-opus-5-5',
+  },
+  {
+    provider: 'openai',
+    label: 'ChatGPT',
+    api_key_configured: false,
+    api_key_masked: '',
+    api_key_updated_at: null,
+    model: '',
+    default_model: '',
+  },
+  {
+    provider: 'gemini',
+    label: 'Gemini',
+    api_key_configured: false,
+    api_key_masked: '',
+    api_key_updated_at: null,
+    model: '',
+    default_model: '',
+  },
+]
 const BASE = {
-  api_key_configured: false,
-  api_key_masked: '',
-  api_key_updated_at: null,
-  claude_model: 'claude-opus-5-5',
-  available_models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5'],
+  llm_provider: 'anthropic',
+  chatbot_enabled: false,
+  providers: PROVIDERS,
   bot_name: '고객지원 챗봇',
   welcome_message: '안녕하세요!',
   extra_instructions: '',
-}
-const CONFIGURED = {
-  ...BASE,
-  api_key_configured: true,
-  api_key_masked: 'sk-ant-...WXYZ',
-  api_key_updated_at: '2026-10-02T09:00:00Z',
 }
 
 const STATS = {
@@ -65,71 +88,17 @@ describe('SettingsView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.resetAllMocks() // also drops queued *Once values left by a previous test
-    settingsApi.getRagSettings.mockReturnValue(new Promise(() => {}))
+    settingsApi.getRagSettings.mockReturnValue(new Promise(() => {})) // own spec
+    settingsApi.listProviderModels.mockResolvedValue({ models: [], default_model: '' })
     chatApi.fetchStatus.mockResolvedValue({ enabled: true, bot_name: 'x', welcome_message: 'y' })
     knowledgeApi.getStats.mockResolvedValue(STATS)
     document.body.innerHTML = ''
   })
 
-  describe('API Key card', () => {
-    it('warns when no key is registered', async () => {
-      const wrapper = await mountView()
+  it('shows the LLM card for the loaded settings', async () => {
+    const wrapper = await mountView()
 
-      expect(wrapper.get('[data-test="api-key-status"]').text()).toBe('미등록')
-      expect(wrapper.get('[data-test="api-key-card"]').text()).toContain(
-        'API Key를 등록해야 챗봇이 활성화됩니다.',
-      )
-      expect(wrapper.find('[data-test="delete-api-key"]').exists()).toBe(false)
-    })
-
-    it('shows only the masked key when registered', async () => {
-      const wrapper = await mountView(CONFIGURED)
-
-      expect(wrapper.get('[data-test="api-key-status"]').text()).toBe('등록됨')
-      expect(wrapper.get('[data-test="api-key-masked"]').text()).toBe('sk-ant-...WXYZ')
-    })
-
-    it('saves the key, clears the input and refreshes chat status', async () => {
-      settingsApi.saveApiKey.mockResolvedValueOnce(CONFIGURED)
-      const wrapper = await mountView()
-
-      await wrapper.get('#api-key').setValue('sk-ant-api03-secret-WXYZ')
-      await wrapper.get('[data-test="api-key-card"] form').trigger('submit')
-      await flushPromises()
-
-      expect(settingsApi.saveApiKey).toHaveBeenCalledWith('sk-ant-api03-secret-WXYZ')
-      expect(wrapper.get('#api-key').element.value).toBe('')
-      expect(wrapper.get('[data-test="api-key-status"]').text()).toBe('등록됨')
-      expect(chatApi.fetchStatus).toHaveBeenCalled()
-    })
-
-    it('shows the server error for an invalid key and clears the input', async () => {
-      settingsApi.saveApiKey.mockRejectedValueOnce(
-        apiError(400, { code: 'INVALID_API_KEY', message: '유효하지 않은 API Key입니다.' }),
-      )
-      const wrapper = await mountView()
-
-      await wrapper.get('#api-key').setValue('sk-ant-bad-key-0000')
-      await wrapper.get('[data-test="api-key-card"] form').trigger('submit')
-      await flushPromises()
-
-      expect(wrapper.get('[data-test="api-key-error"]').text()).toBe('유효하지 않은 API Key입니다.')
-      expect(wrapper.get('#api-key').element.value).toBe('')
-    })
-
-    it('deletes the key only after confirmation', async () => {
-      const wrapper = await mountView(CONFIGURED)
-      settingsApi.getSettings.mockResolvedValueOnce(BASE) // reload after delete
-
-      await wrapper.get('[data-test="delete-api-key"]').trigger('click')
-      expect(settingsApi.deleteApiKey).not.toHaveBeenCalled()
-
-      await wrapper.get('[data-test="confirm"]').trigger('click')
-      await flushPromises()
-
-      expect(settingsApi.deleteApiKey).toHaveBeenCalledTimes(1)
-      expect(wrapper.get('[data-test="api-key-status"]').text()).toBe('미등록')
-    })
+    expect(wrapper.find('[data-test="llm-card"]').exists()).toBe(true)
   })
 
   describe('chatbot settings card', () => {
@@ -143,13 +112,11 @@ describe('SettingsView', () => {
       )
       const wrapper = await mountView()
 
-      await wrapper.get('#bot-model').setValue('claude-sonnet-5-5')
       await wrapper.get('#bot-extra').setValue('친근하게')
       await wrapper.get('[data-test="bot-card"] form').trigger('submit')
       await flushPromises()
 
       expect(settingsApi.updateSettings).toHaveBeenCalledWith({
-        claude_model: 'claude-sonnet-5-5',
         bot_name: '고객지원 챗봇',
         welcome_message: '안녕하세요!',
         extra_instructions: '친근하게',

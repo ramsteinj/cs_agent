@@ -5,13 +5,14 @@ import { getErrorMessage, getFieldErrors } from '@/api/client'
 import * as knowledgeApi from '@/api/knowledge'
 import * as settingsApi from '@/api/settings'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import LlmSettingsCard from '@/components/LlmSettingsCard.vue'
 import LoadingButton from '@/components/LoadingButton.vue'
 import RagSettingsCard from '@/components/RagSettingsCard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useToastStore } from '@/stores/toast'
 
-// Cards: API Key, chatbot settings, RAG settings, knowledge index, password (specs/06 §5.5).
+// Cards: LLM, chatbot settings, RAG settings, knowledge index, password (specs/06 §5.5).
 const EXTRA_MAX = 2000
 
 const auth = useAuthStore()
@@ -21,16 +22,8 @@ const toast = useToastStore()
 const settings = ref(null)
 const loadError = ref('')
 
-// --- API Key -------------------------------------------------------------
-const apiKeyInput = ref('')
-const apiKeyError = ref('')
-const savingKey = ref(false)
-const deletingKey = ref(false)
-const confirmDelete = ref(false)
-
 // --- Chatbot settings ----------------------------------------------------
 const botForm = reactive({
-  claude_model: '',
   bot_name: '',
   welcome_message: '',
   extra_instructions: '',
@@ -52,15 +45,10 @@ const savingPw = ref(false)
 function applySettings(data) {
   settings.value = data
   Object.assign(botForm, {
-    claude_model: data.claude_model,
     bot_name: data.bot_name,
     welcome_message: data.welcome_message,
     extra_instructions: data.extra_instructions,
   })
-}
-
-function formatDate(value) {
-  return value ? new Date(value).toLocaleString('ko-KR') : ''
 }
 
 async function loadStats() {
@@ -91,37 +79,6 @@ async function runReindex() {
     toast.show(getErrorMessage(err), 'danger')
   } finally {
     reindexing.value = false
-  }
-}
-
-async function saveApiKey() {
-  apiKeyError.value = ''
-  savingKey.value = true
-  try {
-    applySettings(await settingsApi.saveApiKey(apiKeyInput.value.trim()))
-    toast.show('API Key가 저장되었습니다.')
-    chat.loadStatus()
-  } catch (err) {
-    apiKeyError.value = getFieldErrors(err).api_key || getErrorMessage(err)
-  } finally {
-    // Never keep the secret in the page after a save attempt (specs/07 §3).
-    apiKeyInput.value = ''
-    savingKey.value = false
-  }
-}
-
-async function deleteApiKey() {
-  confirmDelete.value = false
-  deletingKey.value = true
-  try {
-    await settingsApi.deleteApiKey()
-    applySettings(await settingsApi.getSettings())
-    toast.show('API Key가 삭제되었습니다. 챗봇이 비활성화됩니다.', 'secondary')
-    chat.loadStatus()
-  } catch (err) {
-    toast.show(getErrorMessage(err), 'danger')
-  } finally {
-    deletingKey.value = false
   }
 }
 
@@ -178,83 +135,13 @@ async function changePassword() {
     </div>
 
     <template v-if="settings">
-      <!-- 1. Claude API Key -->
-      <div class="card mb-4" data-test="api-key-card">
-        <div class="card-header d-flex align-items-center">
-          Claude API Key
-          <span
-            class="badge ms-2"
-            :class="settings.api_key_configured ? 'bg-success' : 'bg-secondary'"
-            data-test="api-key-status"
-          >
-            {{ settings.api_key_configured ? '등록됨' : '미등록' }}
-          </span>
-        </div>
-        <form class="card-body" novalidate @submit.prevent="saveApiKey">
-          <div v-if="!settings.api_key_configured" class="alert alert-warning py-2" role="alert">
-            API Key를 등록해야 챗봇이 활성화됩니다.
-          </div>
-          <p v-else class="mb-3 small">
-            현재 키: <code data-test="api-key-masked">{{ settings.api_key_masked }}</code>
-            <span class="text-muted ms-2"
-              >({{ formatDate(settings.api_key_updated_at) }} 등록)</span
-            >
-          </p>
-          <label for="api-key" class="form-label">
-            {{ settings.api_key_configured ? '새 API Key' : 'API Key' }}
-          </label>
-          <input
-            id="api-key"
-            v-model="apiKeyInput"
-            type="password"
-            class="form-control"
-            :class="{ 'is-invalid': apiKeyError }"
-            autocomplete="off"
-            placeholder="sk-ant-..."
-          />
-          <div class="invalid-feedback" data-test="api-key-error">{{ apiKeyError }}</div>
-          <div class="form-text">저장 전에 Anthropic API로 키가 유효한지 확인합니다.</div>
-          <div class="mt-3 d-flex gap-2">
-            <LoadingButton
-              :loading="savingKey"
-              loading-text="검증 중..."
-              :disabled="!apiKeyInput.trim()"
-              data-test="save-api-key"
-            >
-              저장
-            </LoadingButton>
-            <LoadingButton
-              v-if="settings.api_key_configured"
-              type="button"
-              variant="outline-danger"
-              :loading="deletingKey"
-              data-test="delete-api-key"
-              @click="confirmDelete = true"
-            >
-              삭제
-            </LoadingButton>
-          </div>
-        </form>
-      </div>
+      <!-- 1. LLM provider, API Keys and models -->
+      <LlmSettingsCard :settings="settings" @update:settings="applySettings" />
 
       <!-- 2. Chatbot settings -->
       <div class="card mb-4" data-test="bot-card">
         <div class="card-header">챗봇 설정</div>
         <form class="card-body" novalidate @submit.prevent="saveBotSettings">
-          <div class="mb-3">
-            <label for="bot-model" class="form-label">Claude 모델</label>
-            <select
-              id="bot-model"
-              v-model="botForm.claude_model"
-              class="form-select"
-              :class="{ 'is-invalid': botErrors.claude_model }"
-            >
-              <option v-for="model in settings.available_models" :key="model" :value="model">
-                {{ model }}
-              </option>
-            </select>
-            <div class="invalid-feedback">{{ botErrors.claude_model }}</div>
-          </div>
           <div class="mb-3">
             <label for="bot-name" class="form-label">챗봇 이름 *</label>
             <input
@@ -406,14 +293,6 @@ async function changePassword() {
       variant="primary"
       @confirm="runReindex"
       @cancel="confirmReindex = false"
-    />
-    <ConfirmDialog
-      :show="confirmDelete"
-      title="API Key 삭제"
-      message="API Key를 삭제하면 고객 채팅이 즉시 비활성화됩니다. 삭제하시겠습니까?"
-      confirm-text="삭제"
-      @confirm="deleteApiKey"
-      @cancel="confirmDelete = false"
     />
   </div>
 </template>

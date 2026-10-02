@@ -4,10 +4,11 @@ from unittest import mock
 
 import pytest
 
-from chat import llm, services
+import llm
+from chat import services
 from chat.models import ChatMessage, ChatSession
 from knowledge.tests.factories import make_company, make_product
-from settings_app.models import SystemSetting
+from settings_app.models import LLMProviderConfig, SystemSetting
 
 URL = "/api/chat/messages"
 
@@ -16,9 +17,10 @@ def _fake_reply(deltas, final_text=None, refused=False, error=None):
     """Replacement for llm.stream_reply recording its inputs."""
     calls = []
 
-    def stream_reply(api_key, model, system, messages, max_output_tokens):
+    def stream_reply(provider, api_key, model, system, messages, max_output_tokens):
         calls.append(
             {
+                "provider": provider,
                 "api_key": api_key,
                 "model": model,
                 "system": system,
@@ -48,12 +50,12 @@ def _events(response):
 
 @pytest.fixture
 def enabled(db):
-    setting = SystemSetting.load()
-    setting.set_api_key("sk-ant-api03-test-secret-WXYZ")
-    return setting
+    LLMProviderConfig.get("anthropic").set_api_key("sk-ant-api03-test-secret-WXYZ")
+    return SystemSetting.load()
 
 
 def _set(**fields):
+    SystemSetting.load()  # make sure the singleton row exists before updating it
     SystemSetting.objects.filter(pk=1).update(**fields)
 
 
@@ -150,6 +152,7 @@ class TestStreaming:
         assert (assistant.input_tokens, assistant.output_tokens) == (10, 5)
 
         call = calls[0]
+        assert call["provider"] == "anthropic"
         assert call["api_key"] == "sk-ant-api03-test-secret-WXYZ"
         assert call["model"] == "claude-opus-5-5"
         assert call["max_output_tokens"] == 4096
@@ -158,7 +161,9 @@ class TestStreaming:
         assert "고객 질문: 오케이드라이브 가격이 얼마예요?" in call["messages"][-1]["content"]
 
     def test_uses_configured_model_bot_name_and_extra_instructions(self, client, enabled, session):
-        enabled.claude_model = "claude-haiku-4-5"
+        claude = LLMProviderConfig.get("anthropic")
+        claude.model = "claude-haiku-4-5"
+        claude.save()
         enabled.bot_name = "OK봇"
         enabled.extra_instructions = "반말 금지"
         enabled.save()
@@ -313,3 +318,36 @@ class TestRagSettingsApplied:
             events = _events(_send(client, session, "오케이드라이브 가격"))
 
         assert len(events[-1]["sources"]) == 1
+
+
+@pytest.mark.django_db
+def test_selected_provider_is_used(client, session):
+    gemini = LLMProviderConfig.get("gemini")
+    gemini.set_api_key("AIzaSyTestSecret1234")
+    gemini.model = "gemini-test-pro"
+    gemini.save()
+    _set(llm_provider="gemini")
+    reply, calls = _fake_reply(["네"])
+
+    with mock.patch("chat.services.llm.stream_reply", reply):
+        events = _events(_send(client, session))
+
+    assert events[-1]["type"] == "done"
+    assert (calls[0]["provider"], calls[0]["model"], calls[0]["api_key"]) == (
+        "gemini",
+        "gemini-test-pro",
+        "AIzaSyTestSecret1234",
+    )
+    assert session.messages.get(role="assistant").model == "gemini-test-pro"
+
+
+@pytest.mark.django_db
+def test_llm_failure_is_logged_with_provider_error_summary(client, enabled, session, caplog):
+    summary = "status=400 type=invalid_request_error request_id=req_011credit"
+    reply, _ = _fake_reply([], error=llm.LLMError(summary))
+
+    with mock.patch("chat.services.llm.stream_reply", reply):
+        _events(_send(client, session))
+
+    assert f"LLM call failed (provider=anthropic, model=claude-opus-5-5): {summary}" in caplog.text
+    assert "sk-ant-api03-test-secret-WXYZ" not in caplog.text

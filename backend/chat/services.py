@@ -9,11 +9,11 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.throttling import BaseThrottle
 
+import llm
 from knowledge.models import KnowledgeChunk
 from knowledge.retrieval import search
 from settings_app.models import SystemSetting
 
-from . import llm
 from .models import ChatMessage, ChatSession
 from .prompts import build_system_prompt, build_user_content
 
@@ -123,13 +123,14 @@ def answer_stream(session, question):
     The caller has already checked the chatbot is enabled and rate limits.
     """
     setting = SystemSetting.load()
-    api_key = setting.get_api_key()
+    provider = setting.active_provider_config
+    api_key = provider.get_api_key()
 
     user_message = ChatMessage.objects.create(
         session=session, role=ChatMessage.Role.USER, content=question
     )
     assistant = ChatMessage.objects.create(
-        session=session, role=ChatMessage.Role.ASSISTANT, model=setting.claude_model
+        session=session, role=ChatMessage.Role.ASSISTANT, model=provider.model
     )
     session.last_activity_at = timezone.now()
     session.save(update_fields=["last_activity_at", "updated_at"])
@@ -147,7 +148,12 @@ def answer_stream(session, question):
         system = build_system_prompt(setting.bot_name, setting.extra_instructions)
 
         replies = llm.stream_reply(
-            api_key, setting.claude_model, system, messages, setting.llm_max_output_tokens
+            provider.provider,
+            api_key,
+            provider.model,
+            system,
+            messages,
+            setting.llm_max_output_tokens,
         )
         while True:
             try:
@@ -158,7 +164,15 @@ def answer_stream(session, question):
             streamed.append(text)
             yield {"type": "delta", "text": text}
     except Exception as exc:  # LLMError, embedding failures, DB errors...
-        if not isinstance(exc, llm.LLMError):
+        if isinstance(exc, llm.LLMError):
+            # str(exc) is the provider's safe summary: status / error type / request ID.
+            logger.warning(
+                "LLM call failed (provider=%s, model=%s): %s",
+                provider.provider,
+                provider.model,
+                exc,
+            )
+        else:
             logger.exception("Chat turn failed")
         _mark_failed(user_message, assistant, "".join(streamed))
         yield {"type": "error", "code": "LLM_ERROR", "message": ERROR_MESSAGE}
@@ -169,7 +183,7 @@ def answer_stream(session, question):
         raise
 
     assistant.content = final.text
-    assistant.model = final.model or setting.claude_model
+    assistant.model = final.model or provider.model
     assistant.input_tokens = final.input_tokens
     assistant.output_tokens = final.output_tokens
     assistant.save()

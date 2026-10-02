@@ -42,13 +42,22 @@ def test_login_events(api_client, audit_log):
 @pytest.mark.django_db
 def test_api_key_events_never_contain_the_key(admin_client, audit_log):
     key = "sk-ant-api03-audit-secret-WXYZ"
-    with mock.patch("settings_app.services.anthropic.Anthropic"):
-        admin_client.put("/api/admin/settings/api-key", {"api_key": key}, format="json")
-    admin_client.delete("/api/admin/settings/api-key")
+    with mock.patch("llm.anthropic_provider.anthropic.Anthropic"):
+        admin_client.put(
+            "/api/admin/settings/providers/anthropic/api-key", {"api_key": key}, format="json"
+        )
+    admin_client.delete("/api/admin/settings/providers/anthropic/api-key")
+    admin_client.patch(
+        "/api/admin/settings/providers/anthropic", {"model": "claude-sonnet-5-5"}, format="json"
+    )
 
     lines = _lines(audit_log)
-    assert "event=api_key_updated user='manager'" in lines
-    assert "event=api_key_deleted user='manager'" in lines
+    assert "event=api_key_updated user='manager' provider='anthropic'" in lines
+    assert "event=api_key_deleted user='manager' provider='anthropic'" in lines
+    assert (
+        "event=llm_model_updated user='manager' provider='anthropic' model='claude-sonnet-5-5'"
+        in lines
+    )
     assert key not in audit_log.text
 
 

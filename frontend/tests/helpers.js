@@ -1,3 +1,4 @@
+/* eslint-disable vue/one-component-per-file -- tiny test-only wrapper components */
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h } from 'vue'

@@ -3,18 +3,50 @@ import re
 from django.conf import settings
 from rest_framework import serializers
 
-from .models import AVAILABLE_MODELS, EXTRA_INSTRUCTIONS_MAX_LENGTH, RAG_LIMITS, SystemSetting
+import llm
+
+from .models import EXTRA_INSTRUCTIONS_MAX_LENGTH, RAG_LIMITS, LLMProviderConfig, SystemSetting
+
+
+class ProviderSerializer(serializers.ModelSerializer):
+    """Per-provider state. Never exposes the API Key itself."""
+
+    label = serializers.SerializerMethodField()
+    api_key_configured = serializers.SerializerMethodField()
+    api_key_masked = serializers.SerializerMethodField()
+    default_model = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LLMProviderConfig
+        fields = [
+            "provider",
+            "label",
+            "api_key_configured",
+            "api_key_masked",
+            "api_key_updated_at",
+            "model",
+            "default_model",
+        ]
+
+    def get_label(self, obj):
+        return obj.spec.label
+
+    def get_api_key_configured(self, obj):
+        return obj.api_key_configured
+
+    def get_api_key_masked(self, obj):
+        return obj.api_key_hint if obj.api_key_configured else ""
+
+    def get_default_model(self, obj):
+        return obj.spec.default_model
 
 
 class SystemSettingSerializer(serializers.ModelSerializer):
-    """Never exposes the API Key itself, only whether it is set and a masked hint."""
-
-    api_key_configured = serializers.SerializerMethodField()
-    api_key_masked = serializers.CharField(read_only=True)
-    available_models = serializers.SerializerMethodField()
-    claude_model = serializers.ChoiceField(choices=AVAILABLE_MODELS)
-    bot_name = serializers.CharField(max_length=100)
-    welcome_message = serializers.CharField(max_length=1000)
+    llm_provider = serializers.ChoiceField(choices=llm.PROVIDER_CHOICES, required=False)
+    chatbot_enabled = serializers.SerializerMethodField()
+    providers = serializers.SerializerMethodField()
+    bot_name = serializers.CharField(max_length=100, required=False)
+    welcome_message = serializers.CharField(max_length=1000, required=False)
     extra_instructions = serializers.CharField(
         max_length=EXTRA_INSTRUCTIONS_MAX_LENGTH, allow_blank=True, required=False
     )
@@ -22,22 +54,19 @@ class SystemSettingSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemSetting
         fields = [
-            "api_key_configured",
-            "api_key_masked",
-            "api_key_updated_at",
-            "claude_model",
-            "available_models",
+            "llm_provider",
+            "chatbot_enabled",
+            "providers",
             "bot_name",
             "welcome_message",
             "extra_instructions",
         ]
-        read_only_fields = ["api_key_updated_at"]
 
-    def get_api_key_configured(self, obj):
+    def get_chatbot_enabled(self, obj):
         return obj.chatbot_enabled
 
-    def get_available_models(self, obj):
-        return AVAILABLE_MODELS
+    def get_providers(self, obj):
+        return ProviderSerializer(LLMProviderConfig.all_providers(), many=True).data
 
 
 class ApiKeySerializer(serializers.Serializer):
@@ -46,6 +75,16 @@ class ApiKeySerializer(serializers.Serializer):
     def validate_api_key(self, value):
         if len(value) < 8 or any(ch.isspace() for ch in value):
             raise serializers.ValidationError("API Key 형식이 올바르지 않습니다.")
+        return value
+
+
+class ProviderModelSerializer(serializers.Serializer):
+    model = serializers.CharField(max_length=100)
+
+    def validate_model(self, value):
+        value = value.strip()
+        if not re.fullmatch(r"[A-Za-z0-9._:/-]+", value):
+            raise serializers.ValidationError("모델 이름 형식이 올바르지 않습니다.")
         return value
 
 
