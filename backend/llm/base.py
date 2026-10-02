@@ -38,6 +38,13 @@ class Provider:
     default_model = ""
     recommended_models: tuple = ()
     key_prefix = ""  # fixed, non-secret key prefix shown in the masked value
+    temperature_range = (0.0, 2.0)
+    # Model ID prefixes known to accept `temperature` (allowlist: an unknown model gets no
+    # temperature, because an unsupported sampling parameter fails the whole request).
+    temperature_model_prefixes: tuple = ()
+
+    def supports_temperature(self, model):
+        return bool(model) and model.startswith(self.temperature_model_prefixes)
 
     def mask_key(self, api_key):
         prefix = self.key_prefix if api_key.startswith(self.key_prefix) else ""
@@ -51,12 +58,16 @@ class Provider:
         """Chat-capable model IDs."""
         raise NotImplementedError
 
-    def stream_reply(self, api_key, model, system, messages, max_output_tokens):
+    def stream_reply(self, api_key, model, system, messages, max_output_tokens, temperature=None):
         """Yield text deltas, then return a FinalReply (use `yield from`).
 
         messages: [{"role": "user" | "assistant", "content": str}, ...]
+        temperature: sent only when not None and the model supports it.
         """
         raise NotImplementedError
 
     def describe_error(self, exc):
         return f"error={type(exc).__name__}"
+
+    def effective_temperature(self, model, temperature):
+        return temperature if temperature is not None and self.supports_temperature(model) else None

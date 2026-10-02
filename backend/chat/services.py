@@ -154,6 +154,7 @@ def answer_stream(session, question):
             system,
             messages,
             setting.llm_max_output_tokens,
+            provider.temperature,
         )
         while True:
             try:

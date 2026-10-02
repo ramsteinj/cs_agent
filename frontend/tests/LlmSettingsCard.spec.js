@@ -20,6 +20,9 @@ function provider(name, label, extra = {}) {
     api_key_updated_at: null,
     model: name === 'anthropic' ? 'claude-opus-5-5' : '',
     default_model: name === 'anthropic' ? 'claude-opus-5-5' : '',
+    temperature: null,
+    temperature_supported: false, // Opus 5.5 rejects sampling parameters
+    temperature_range: name === 'anthropic' ? [0, 1] : [0, 2],
     ...extra,
   }
 }
@@ -182,5 +185,109 @@ describe('LlmSettingsCard', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('LLM API에 연결할 수 없어 확인하지 못했습니다.')
+  })
+})
+
+describe('LlmSettingsCard temperature', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.resetAllMocks()
+    document.body.innerHTML = ''
+    chatApi.fetchStatus.mockResolvedValue({ enabled: true, bot_name: 'x', welcome_message: '' })
+    settingsApi.listProviderModels.mockResolvedValue(CLAUDE_MODELS)
+  })
+
+  const fieldset = (wrapper) => wrapper.get('[data-test="temperature"] fieldset')
+
+  it('is disabled with the reason for a model that does not support it (Opus 5.5)', async () => {
+    const wrapper = await mountCard()
+
+    expect(fieldset(wrapper).attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="temperature-unsupported"]').text()).toContain(
+      '선택한 모델(claude-opus-5-5)은 temperature 설정을 지원하지 않습니다.',
+    )
+  })
+
+  it('is enabled for a supported model and saves the value', async () => {
+    const haiku = { model: 'claude-haiku-4-5', temperature_supported: true }
+    settingsApi.updateProviderTemperature.mockResolvedValue({})
+    settingsApi.getSettings.mockResolvedValue(settings({ claude: { ...haiku, temperature: 0.3 } }))
+    const wrapper = await mountCard(settings({ claude: haiku }))
+
+    expect(fieldset(wrapper).attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-test="temperature-unsupported"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="temperature-input"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="temperature-input"]').attributes('max')).toBe('1')
+
+    await wrapper.get('[data-test="temperature-default"]').setValue(false)
+    await wrapper.get('[data-test="temperature-input"]').setValue('0.3')
+    await wrapper.get('[data-test="temperature"]').trigger('submit')
+    await flushPromises()
+
+    expect(settingsApi.updateProviderTemperature).toHaveBeenCalledWith('anthropic', 0.3)
+    expect(wrapper.get('[data-test="temperature-input"]').element.value).toBe('0.3')
+  })
+
+  it('saves null when the model default is chosen', async () => {
+    const haiku = { model: 'claude-haiku-4-5', temperature_supported: true, temperature: 0.5 }
+    settingsApi.updateProviderTemperature.mockResolvedValue({})
+    settingsApi.getSettings.mockResolvedValue(settings({ claude: { ...haiku, temperature: null } }))
+    const wrapper = await mountCard(settings({ claude: haiku }))
+    expect(wrapper.get('[data-test="temperature-default"]').element.checked).toBe(false)
+
+    await wrapper.get('[data-test="temperature-default"]').setValue(true)
+    await wrapper.get('[data-test="temperature"]').trigger('submit')
+    await flushPromises()
+
+    expect(settingsApi.updateProviderTemperature).toHaveBeenCalledWith('anthropic', null)
+  })
+
+  it('shows the server validation message', async () => {
+    settingsApi.updateProviderTemperature.mockRejectedValue(
+      apiError(400, {
+        code: 'VALIDATION_ERROR',
+        message: '입력값을 확인해 주세요.',
+        details: { temperature: ['0~1 사이의 값을 입력해 주세요.'] },
+      }),
+    )
+    const wrapper = await mountCard(
+      settings({ claude: { model: 'claude-haiku-4-5', temperature_supported: true } }),
+    )
+
+    await wrapper.get('[data-test="temperature-default"]').setValue(false)
+    await wrapper.get('[data-test="temperature-input"]').setValue('1.5')
+    await wrapper.get('[data-test="temperature"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="temperature-error"]').text()).toBe(
+      '0~1 사이의 값을 입력해 주세요.',
+    )
+  })
+
+  it('re-evaluates support when the model changes', async () => {
+    settingsApi.updateProviderModel.mockResolvedValue({})
+    settingsApi.getSettings.mockResolvedValue(
+      settings({ claude: { model: 'claude-haiku-4-5', temperature_supported: true } }),
+    )
+    const wrapper = await mountCard()
+    expect(fieldset(wrapper).attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-test="model-select"]').setValue('claude-haiku-4-5')
+    await flushPromises()
+
+    expect(fieldset(wrapper).attributes('disabled')).toBeUndefined()
+  })
+
+  it('asks to choose a model first for ChatGPT without a model', async () => {
+    const wrapper = await mountCard(settings({ openai: { api_key_configured: true } }))
+    settingsApi.listProviderModels.mockResolvedValue({ models: ['gpt-4.1'], default_model: '' })
+
+    await wrapper.get('[data-test="tab-openai"]').trigger('click')
+    await flushPromises()
+
+    expect(fieldset(wrapper).attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="temperature-unsupported"]').text()).toBe(
+      '모델을 먼저 선택하세요.',
+    )
   })
 })

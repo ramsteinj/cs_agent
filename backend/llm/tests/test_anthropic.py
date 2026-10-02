@@ -155,3 +155,43 @@ def test_list_models_puts_recommended_first(client_cls):
         "claude-haiku-4-5",
         "claude-opus-4-8",
     ]
+
+
+@pytest.mark.parametrize(
+    ("model", "supported"),
+    [
+        ("claude-opus-5-5", False),
+        ("claude-sonnet-5-5", False),
+        ("claude-opus-5", False),
+        ("claude-sonnet-5", False),
+        ("claude-opus-4-8", False),
+        ("claude-opus-4-7", False),
+        ("claude-fable-5-1", False),
+        ("claude-haiku-4-5", True),
+        ("claude-haiku-4-5-20251001", True),
+        ("claude-sonnet-4-6", True),
+        ("claude-opus-4-6", True),
+        ("claude-3-7-sonnet-latest", True),
+        ("claude-future-9", False),
+        ("", False),
+    ],
+)
+def test_temperature_support(model, supported):
+    assert provider.supports_temperature(model) is supported
+
+
+def test_temperature_range_is_0_to_1():
+    assert provider.temperature_range == (0.0, 1.0)
+
+
+def test_temperature_sent_only_when_supported(client_cls):
+    stream = _stream_returns(client_cls, [], _final())
+
+    run(provider.stream_reply("key", "claude-haiku-4-5", "sys", [], 512, temperature=0.3))
+    assert stream.call_args.kwargs["temperature"] == 0.3
+
+    run(provider.stream_reply("key", "claude-opus-5-5", "sys", [], 512, temperature=0.3))
+    assert "temperature" not in stream.call_args.kwargs
+
+    run(provider.stream_reply("key", "claude-haiku-4-5", "sys", [], 512, temperature=None))
+    assert "temperature" not in stream.call_args.kwargs

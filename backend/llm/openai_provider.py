@@ -30,6 +30,8 @@ class OpenAIProvider(Provider):
     label = "ChatGPT"
     default_model = ""  # chosen by the admin from the account's model list
     key_prefix = "sk-"
+    # Reasoning models (o1/o3/o4, gpt-5 family) only accept the default temperature.
+    temperature_model_prefixes = ("gpt-4", "gpt-3.5", "chatgpt-4o")
 
     def _client(self, api_key, timeout=TIMEOUT_SECONDS, max_retries=MAX_RETRIES):
         return openai.OpenAI(api_key=api_key, timeout=timeout, max_retries=max_retries)
@@ -58,15 +60,19 @@ class OpenAIProvider(Provider):
             raise LLMError(self.describe_error(exc)) from None
         return sorted(i for i in ids if is_chat_model(i))
 
-    def stream_reply(self, api_key, model, system, messages, max_output_tokens):
+    def stream_reply(self, api_key, model, system, messages, max_output_tokens, temperature=None):
         client = self._client(api_key)
+        params = {
+            "model": model,
+            "instructions": system,
+            "input": [{"role": m["role"], "content": m["content"]} for m in messages],
+            "max_output_tokens": max_output_tokens,
+        }
+        temperature = self.effective_temperature(model, temperature)
+        if temperature is not None:
+            params["temperature"] = temperature
         try:
-            with client.responses.stream(
-                model=model,
-                instructions=system,
-                input=[{"role": m["role"], "content": m["content"]} for m in messages],
-                max_output_tokens=max_output_tokens,
-            ) as stream:
+            with client.responses.stream(**params) as stream:
                 for event in stream:
                     if event.type == "response.output_text.delta":
                         yield event.delta

@@ -15,6 +15,8 @@ class ProviderSerializer(serializers.ModelSerializer):
     api_key_configured = serializers.SerializerMethodField()
     api_key_masked = serializers.SerializerMethodField()
     default_model = serializers.SerializerMethodField()
+    temperature_supported = serializers.SerializerMethodField()
+    temperature_range = serializers.SerializerMethodField()
 
     class Meta:
         model = LLMProviderConfig
@@ -26,6 +28,9 @@ class ProviderSerializer(serializers.ModelSerializer):
             "api_key_updated_at",
             "model",
             "default_model",
+            "temperature",
+            "temperature_supported",
+            "temperature_range",
         ]
 
     def get_label(self, obj):
@@ -39,6 +44,12 @@ class ProviderSerializer(serializers.ModelSerializer):
 
     def get_default_model(self, obj):
         return obj.spec.default_model
+
+    def get_temperature_supported(self, obj):
+        return obj.temperature_supported
+
+    def get_temperature_range(self, obj):
+        return list(obj.spec.temperature_range)
 
 
 class SystemSettingSerializer(serializers.ModelSerializer):
@@ -78,14 +89,39 @@ class ApiKeySerializer(serializers.Serializer):
         return value
 
 
-class ProviderModelSerializer(serializers.Serializer):
-    model = serializers.CharField(max_length=100)
+class ProviderConfigSerializer(serializers.Serializer):
+    """PATCH model and/or temperature (None = model default)."""
+
+    model = serializers.CharField(max_length=100, required=False)
+    temperature = serializers.FloatField(required=False, allow_null=True)
 
     def validate_model(self, value):
         value = value.strip()
         if not re.fullmatch(r"[A-Za-z0-9._:/-]+", value):
             raise serializers.ValidationError("모델 이름 형식이 올바르지 않습니다.")
         return value
+
+    def validate(self, attrs):
+        config = self.context["config"]
+        temperature = attrs.get("temperature")
+        if temperature is None:
+            return attrs
+        model = attrs.get("model", config.model)
+        spec = config.spec
+        if not spec.supports_temperature(model):
+            raise serializers.ValidationError(
+                {
+                    "temperature": [
+                        f"선택한 모델({model or '미선택'})은 temperature 설정을 지원하지 않습니다."
+                    ]
+                }
+            )
+        low, high = spec.temperature_range
+        if not low <= temperature <= high:
+            raise serializers.ValidationError(
+                {"temperature": [f"{low:g}~{high:g} 사이의 값을 입력해 주세요."]}
+            )
+        return attrs
 
 
 def _int_field(name):

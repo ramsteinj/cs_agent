@@ -123,6 +123,7 @@ npm run dev                         # /api 요청은 Django(8000)로 프록시
 - **시스템 설정 → LLM 연동**에서 답변에 사용할 LLM을 **Claude / ChatGPT / Gemini** 중 하나로 선택합니다.
 - 공급자마다 API Key를 입력하면 저장 전에 그 공급자 API(무료 모델 목록 조회)로 유효성을 확인합니다. 키는 `FIELD_ENCRYPTION_KEY`로 암호화되어 PostgreSQL(`LLMProviderConfig`)에 저장되며, 화면에는 `sk-ant-...abcd` 형태로만 표시됩니다. 공급자를 바꿔도 다른 공급자의 키는 유지됩니다.
 - 모델: Claude 기본값은 `claude-opus-5-5`(Opus 5.5)이고 `claude-sonnet-5-5` 등으로 바꿀 수 있습니다. ChatGPT·Gemini는 키를 등록하면 그 계정에서 쓸 수 있는 대화형 모델 목록이 표시되고, 그중 하나를 선택해야 합니다.
+- **Temperature**: 공급자별로 설정합니다(기본은 "모델 기본값 사용"). 범위는 Claude 0~1, ChatGPT·Gemini 0~2입니다. 선택한 모델이 temperature를 지원하지 않으면 입력이 비활성화되고 이유가 표시되며, 저장된 값이 있어도 그 모델에는 보내지 않습니다. 지원 모델: Claude `claude-haiku-4-5`·4.6 이하(Opus 5.5, Sonnet 5.5 등 최신 모델은 미지원), ChatGPT `gpt-4*`·`gpt-3.5*`·`chatgpt-4o*`(o 시리즈·gpt-5 등 추론 모델은 미지원), Gemini 전체.
 - 선택한 LLM의 키와 모델이 모두 설정되어야 고객 채팅이 활성화됩니다.
 - **챗봇 설정**에서 챗봇 이름, 환영 메시지, 추가 지시사항(최대 2,000자)을 바꿀 수 있습니다.
 - `FIELD_ENCRYPTION_KEY`를 바꾸면 저장된 키를 복호화할 수 없으므로 다시 입력해야 합니다.

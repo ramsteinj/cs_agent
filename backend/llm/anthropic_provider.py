@@ -31,6 +31,19 @@ class AnthropicProvider(Provider):
     default_model = "claude-opus-5-5"
     recommended_models = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5")
     key_prefix = "sk-ant-"
+    temperature_range = (0.0, 1.0)
+    # Opus 4.7+ (4.8, 5, 5.5), Sonnet 5 / 5.5 and Fable reject sampling parameters (400).
+    temperature_model_prefixes = (
+        "claude-haiku-4-5",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "claude-opus-4-5",
+        "claude-sonnet-4-5",
+        "claude-opus-4-1",
+        "claude-opus-4-0",
+        "claude-sonnet-4-0",
+        "claude-3",
+    )
 
     def _client(self, api_key, timeout=TIMEOUT_SECONDS, max_retries=MAX_RETRIES):
         return anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=max_retries)
@@ -59,13 +72,16 @@ class AnthropicProvider(Provider):
             raise LLMError(self.describe_error(exc)) from None
         return [*self.recommended_models, *(i for i in ids if i not in self.recommended_models)]
 
-    def _params(self, model, system, messages, max_output_tokens):
+    def _params(self, model, system, messages, max_output_tokens, temperature=None):
         params = {
             "model": model,
             "max_tokens": max_output_tokens,
             "system": system,
             "messages": messages,
         }
+        temperature = self.effective_temperature(model, temperature)
+        if temperature is not None:
+            params["temperature"] = temperature
         if model in EFFORT_MODELS:
             params["output_config"] = {"effort": EFFORT}
         if model in FALLBACK_MODELS:
@@ -75,10 +91,10 @@ class AnthropicProvider(Provider):
             params["fallbacks"] = "default"
         return params
 
-    def stream_reply(self, api_key, model, system, messages, max_output_tokens):
+    def stream_reply(self, api_key, model, system, messages, max_output_tokens, temperature=None):
         client = self._client(api_key)
         try:
-            params = self._params(model, system, messages, max_output_tokens)
+            params = self._params(model, system, messages, max_output_tokens, temperature)
             with client.beta.messages.stream(**params) as stream:
                 for text in stream.text_stream:
                     yield text

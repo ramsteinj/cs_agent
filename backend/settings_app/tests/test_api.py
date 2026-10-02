@@ -48,6 +48,9 @@ class TestSettings:
             "api_key_updated_at": None,
             "model": "claude-opus-5-5",
             "default_model": "claude-opus-5-5",
+            "temperature": None,
+            "temperature_supported": False,
+            "temperature_range": [0.0, 1.0],
         }
         assert (chatgpt["label"], chatgpt["model"]) == ("ChatGPT", "")
         assert (gemini["label"], gemini["model"]) == ("Gemini", "")
@@ -230,3 +233,84 @@ def test_failure_logs_have_no_key(admin_client, validate, caplog):
 
     assert "status=401 type=authentication_error request_id=req_1" in caplog.text
     assert KEY not in caplog.text
+
+
+PROVIDER_URL = "/api/admin/settings/providers/{}"
+
+
+@pytest.mark.django_db
+class TestTemperature:
+    def test_unsupported_model_rejects_temperature(self, admin_client):
+        response = admin_client.patch(
+            PROVIDER_URL.format("anthropic"), {"temperature": 0.5}, format="json"
+        )
+
+        assert response.status_code == 400
+        assert "claude-opus-5-5" in response.json()["error"]["details"]["temperature"][0]
+        assert LLMProviderConfig.get("anthropic").temperature is None
+
+    def test_supported_model_saves_temperature(self, admin_client):
+        response = admin_client.patch(
+            PROVIDER_URL.format("anthropic"),
+            {"model": "claude-haiku-4-5", "temperature": 0.4},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["model"], body["temperature"], body["temperature_supported"]) == (
+            "claude-haiku-4-5",
+            0.4,
+            True,
+        )
+
+    @pytest.mark.parametrize(
+        ("provider", "model", "value"),
+        [
+            ("anthropic", "claude-haiku-4-5", 1.5),
+            ("openai", "gpt-4.1", 2.5),
+            ("gemini", "gemini-test-pro", -0.1),
+        ],
+    )
+    def test_range_per_provider(self, admin_client, provider, model, value):
+        response = admin_client.patch(
+            PROVIDER_URL.format(provider), {"model": model, "temperature": value}, format="json"
+        )
+
+        assert response.status_code == 400
+        assert "temperature" in response.json()["error"]["details"]
+
+    def test_openai_and_gemini_allow_up_to_2(self, admin_client):
+        for provider, model in (("openai", "gpt-4.1"), ("gemini", "gemini-test-pro")):
+            response = admin_client.patch(
+                PROVIDER_URL.format(provider), {"model": model, "temperature": 2.0}, format="json"
+            )
+            assert response.status_code == 200
+
+    def test_null_resets_to_model_default(self, admin_client):
+        admin_client.patch(
+            PROVIDER_URL.format("anthropic"),
+            {"model": "claude-haiku-4-5", "temperature": 0.4},
+            format="json",
+        )
+
+        response = admin_client.patch(
+            PROVIDER_URL.format("anthropic"), {"temperature": None}, format="json"
+        )
+
+        assert response.json()["temperature"] is None
+
+    def test_switching_to_unsupported_model_reports_it(self, admin_client):
+        admin_client.patch(
+            PROVIDER_URL.format("anthropic"),
+            {"model": "claude-haiku-4-5", "temperature": 0.4},
+            format="json",
+        )
+
+        body = admin_client.patch(
+            PROVIDER_URL.format("anthropic"), {"model": "claude-sonnet-5-5"}, format="json"
+        ).json()
+
+        assert body["temperature_supported"] is False
+        # The stored value stays but is never sent to this model (llm tests cover that).
+        assert body["temperature"] == 0.4

@@ -112,10 +112,15 @@
 - 공급자별 모델을 선택한다.
   - Claude 기본 모델은 **`claude-opus-5-5`(Opus 5.5)**. 관리자가 `claude-sonnet-5-5`(Sonnet 5.5), `claude-haiku-4-5` 등으로 바꿀 수 있다.
   - ChatGPT·Gemini는 등록한 키로 공급자의 모델 목록을 불러와 그중에서 선택한다.
+- 공급자별 **Temperature**를 설정할 수 있다. 비워 두면 모델 기본값을 쓴다. 범위: Claude 0~1, ChatGPT·Gemini 0~2.
+  - 선택한 모델이 temperature를 지원하지 않으면 관리자 화면의 temperature 입력을 **비활성화**하고 이유를 표시한다 (예: Claude Opus 5.5 / Sonnet 5.5).
+  - 지원하지 않는 모델에는 저장된 값이 있어도 요청에 temperature를 보내지 않는다.
 - 챗봇 이름, 환영 메시지, 추가 지시사항(답변 톤 등, 시스템 프롬프트에 덧붙임, 최대 2,000자)을 변경할 수 있다.
 
 **AC**
 - [ ] 새로 설치하면 Claude 모델이 `claude-opus-5-5`로 설정되어 있다.
+- [ ] `claude-opus-5-5`를 선택하면 temperature 입력이 비활성화되고, `claude-haiku-4-5`를 선택하면 활성화된다.
+- [ ] 지원하지 않는 모델에 temperature를 저장하려 하면 400으로 거부된다.
 - [ ] Claude 모델을 `claude-sonnet-5-5`로 바꾸면 다음 답변부터 그 모델로 생성된다.
 
 ### F-A8. 지식 재색인

@@ -114,6 +114,12 @@ LLM 호출은 `backend/llm/` 패키지에서만 한다. 공급자마다 같은 �
 
 - 공통: 요청마다 DB에서 키·모델을 읽어 클라이언트를 만든다 (변경 즉시 반영). timeout 60초, 재시도 2회. 최대 출력 토큰은 `llm_max_output_tokens`.
 - 메시지 역할: 내부 표현 `user`/`assistant` → Gemini는 `user`/`model`로 변환.
+- **Temperature** (`LLMProviderConfig.temperature`, null이면 보내지 않음). 모르는 모델에 보내면 400으로 채팅이 실패하므로, 지원이 확인된 모델에만 보낸다 (허용 목록, 모델 ID 접두어 기준).
+  | 공급자 | 지원 모델 | 미지원 모델 | 범위 | 전달 방식 |
+  |---|---|---|---|---|
+  | Claude | `claude-haiku-4-5`, `claude-opus-4-6`, `claude-sonnet-4-6`, 4.5 이전 모델 | Opus 4.7·4.8·5·5.5, Sonnet 5·5.5, Fable (sampling 파라미터 400) | 0~1 | `temperature` |
+  | ChatGPT | `gpt-4*`, `gpt-3.5*`, `chatgpt-4o*` | 추론 모델 `o1`/`o3`/`o4*`, `gpt-5*` 및 목록에 없는 모델 | 0~2 | `temperature` |
+  | Gemini | `generateContent` 대화 모델 전체 | — | 0~2 | `GenerateContentConfig.temperature` |
 - 거절이면 "죄송합니다. 해당 질문에는 답변드리기 어렵습니다." 로 답한다.
 - 모델 기본값: Claude `claude-opus-5-5` (관리자가 `claude-sonnet-5-5` 등으로 변경 가능, 모델 ID에 날짜 접미사 금지). ChatGPT·Gemini는 기본 모델 없이 관리자가 공급자 모델 목록에서 선택한다.
 - 모델 목록 필터: ChatGPT는 `gpt-`, `o1`, `o3`, `o4`, `chatgpt-`로 시작하고 audio/realtime/transcribe/tts/image/search/embedding이 들어가지 않는 ID. Gemini는 `supported_actions`에 `generateContent`가 있고 embedding/tts/image/aqa가 들어가지 않는 모델(`models/` 접두어 제거).

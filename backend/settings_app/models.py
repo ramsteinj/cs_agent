@@ -90,6 +90,7 @@ class LLMProviderConfig(TimeStampedModel):
     api_key_hint = models.CharField(max_length=32, blank=True, default="")
     api_key_updated_at = models.DateTimeField(null=True, blank=True)
     model = models.CharField(max_length=100, blank=True, default="")
+    temperature = models.FloatField(null=True, blank=True)  # None = model default
 
     class Meta:
         ordering = ["id"]
@@ -140,6 +141,10 @@ class LLMProviderConfig(TimeStampedModel):
     @property
     def api_key_configured(self) -> bool:
         return self.get_api_key() is not None
+
+    @property
+    def temperature_supported(self) -> bool:
+        return self.spec.supports_temperature(self.model)
 
     @property
     def ready(self) -> bool:

@@ -1,6 +1,6 @@
 <script setup>
 // LLM provider selection + per-provider API Key and model (specs/06 §5.5 card 1).
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import { getErrorMessage, getFieldErrors } from '@/api/client'
 import * as settingsApi from '@/api/settings'
@@ -25,6 +25,11 @@ const apiKeyError = ref('')
 const savingKey = ref(false)
 const deletingKey = ref(false)
 const confirmDelete = ref(false)
+
+// Temperature (null = model default); disabled when the model doesn't support it.
+const temperature = reactive({ useDefault: true, value: 0.7 })
+const temperatureError = ref('')
+const savingTemperature = ref(false)
 
 const models = ref([])
 const modelsError = ref('')
@@ -87,6 +92,41 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => [tab.value, current.value?.temperature, current.value?.model],
+  () => {
+    const value = current.value?.temperature
+    temperature.useDefault = value === null || value === undefined
+    if (!temperature.useDefault) temperature.value = value
+    temperatureError.value = ''
+  },
+  { immediate: true },
+)
+
+const temperatureRange = computed(() => current.value?.temperature_range || [0, 2])
+const temperatureDisabled = computed(
+  () => !current.value?.model || !current.value?.temperature_supported,
+)
+
+async function saveTemperature() {
+  temperatureError.value = ''
+  savingTemperature.value = true
+  try {
+    const value = temperature.useDefault ? null : Number(temperature.value)
+    await settingsApi.updateProviderTemperature(tab.value, value)
+    updated(await settingsApi.getSettings())
+    toast.show(
+      value === null
+        ? 'Temperature를 모델 기본값으로 설정했습니다.'
+        : `Temperature를 ${value}(으)로 설정했습니다.`,
+    )
+  } catch (err) {
+    temperatureError.value = getFieldErrors(err).temperature || getErrorMessage(err)
+  } finally {
+    savingTemperature.value = false
+  }
+}
 
 const modelOptions = computed(() => {
   const model = current.value.model
@@ -273,6 +313,73 @@ async function saveModel(event) {
             </select>
           </template>
         </div>
+
+        <form class="mt-3" novalidate data-test="temperature" @submit.prevent="saveTemperature">
+          <fieldset :disabled="temperatureDisabled || savingTemperature">
+            <legend class="form-label fs-6 mb-1">Temperature</legend>
+            <div
+              v-if="!current.model"
+              class="form-text mt-0 mb-2"
+              data-test="temperature-unsupported"
+            >
+              모델을 먼저 선택하세요.
+            </div>
+            <div
+              v-else-if="!current.temperature_supported"
+              class="alert alert-secondary py-2 small mb-2"
+              role="status"
+              data-test="temperature-unsupported"
+            >
+              선택한 모델({{ current.model }})은 temperature 설정을 지원하지 않습니다. 모델
+              기본값으로 답변합니다.
+            </div>
+            <div class="form-check form-switch mb-2">
+              <input
+                :id="`temperature-default-${current.provider}`"
+                v-model="temperature.useDefault"
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                data-test="temperature-default"
+              />
+              <label class="form-check-label" :for="`temperature-default-${current.provider}`">
+                모델 기본값 사용
+              </label>
+            </div>
+            <div class="input-group" :class="{ 'has-validation': temperatureError }">
+              <label :for="`temperature-${current.provider}`" class="visually-hidden">
+                Temperature 값
+              </label>
+              <input
+                :id="`temperature-${current.provider}`"
+                v-model.number="temperature.value"
+                type="number"
+                class="form-control"
+                :class="{ 'is-invalid': temperatureError }"
+                :min="temperatureRange[0]"
+                :max="temperatureRange[1]"
+                step="0.1"
+                :disabled="temperature.useDefault"
+                :aria-describedby="`temperature-help-${current.provider}`"
+                data-test="temperature-input"
+              />
+              <LoadingButton
+                :loading="savingTemperature"
+                variant="outline-primary"
+                data-test="save-temperature"
+              >
+                저장
+              </LoadingButton>
+              <div class="invalid-feedback" data-test="temperature-error">
+                {{ temperatureError }}
+              </div>
+            </div>
+            <div :id="`temperature-help-${current.provider}`" class="form-text">
+              {{ temperatureRange[0] }}~{{ temperatureRange[1] }}. 낮을수록 일관되고, 높을수록
+              다양한 답변을 만듭니다.
+            </div>
+          </fieldset>
+        </form>
       </div>
     </div>
 

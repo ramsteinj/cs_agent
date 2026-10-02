@@ -147,7 +147,7 @@ v1은 동기 실행(데이터 규모가 작다고 가정). DB advisory lock 또�
 | PATCH | `/api/admin/settings` | `llm_provider`, `bot_name`, `welcome_message`, `extra_instructions` 변경 |
 | PUT | `/api/admin/settings/providers/{provider}/api-key` | 해당 공급자 API Key 등록·변경 (공급자 API로 검증 후 저장) |
 | DELETE | `/api/admin/settings/providers/{provider}/api-key` | API Key 삭제 → 204 |
-| PATCH | `/api/admin/settings/providers/{provider}` | 모델 변경 `{"model": "claude-sonnet-5-5"}` |
+| PATCH | `/api/admin/settings/providers/{provider}` | 모델·temperature 변경 `{"model": "claude-haiku-4-5", "temperature": 0.3}` (temperature `null` = 모델 기본값) |
 | GET | `/api/admin/settings/providers/{provider}/models` | 선택 가능한 모델 목록 (등록된 키로 공급자 모델 목록 API 조회) |
 | GET | `/api/admin/settings/rag` | RAG 튜닝 설정 조회 |
 | PATCH | `/api/admin/settings/rag` | RAG 튜닝 설정 변경 (청크·임베딩 설정이 바뀌면 전체 재색인) |
@@ -162,7 +162,8 @@ GET `/api/admin/settings` 응답:
   "providers": [
     { "provider": "anthropic", "label": "Claude", "api_key_configured": true,
       "api_key_masked": "sk-ant-...abcd", "api_key_updated_at": "2026-10-02T09:00:00Z",
-      "model": "claude-opus-5-5", "default_model": "claude-opus-5-5" },
+      "model": "claude-opus-5-5", "default_model": "claude-opus-5-5",
+      "temperature": null, "temperature_supported": false, "temperature_range": [0.0, 1.0] },
     { "provider": "openai", "label": "ChatGPT", "api_key_configured": false,
       "api_key_masked": "", "api_key_updated_at": null, "model": "", "default_model": "" },
     { "provider": "gemini", "label": "Gemini", "api_key_configured": false,
@@ -177,7 +178,8 @@ GET `/api/admin/settings` 응답:
 - GET models 응답: `{"models": ["claude-opus-5-5", "claude-sonnet-5-5", ...], "default_model": "claude-opus-5-5"}`
   - Claude: 권장 목록(`claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-4-5`) + 키가 있으면 Anthropic 모델 목록. 키가 없어도 권장 목록 반환.
   - ChatGPT / Gemini: 키 필수(없으면 400 `API_KEY_REQUIRED`). 대화형 텍스트 모델만 걸러서 반환 (임베딩·음성·이미지 모델 제외).
-- PATCH 공급자 모델: 공백 없는 1~100자 문자열.
+- PATCH 공급자: `model`은 공백 없는 1~100자 문자열. `temperature`는 `null` 또는 `temperature_range` 안의 숫자이며, (변경 후) 모델이 temperature를 지원하지 않으면 숫자 값은 400 `VALIDATION_ERROR`(`details.temperature`).
+- `temperature_supported`: 현재 모델이 temperature를 지원하는지 (specs/05 §4.1 규칙). 관리자 화면은 false이면 입력을 비활성화한다.
 
 GET/PATCH `/api/admin/settings/rag`:
 ```json

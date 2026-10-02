@@ -17,11 +17,11 @@ def get_provider(name):
         raise ValueError(f"Unknown LLM provider: {name}") from None
 
 
-def stream_reply(provider, api_key, model, system, messages, max_output_tokens):
+def stream_reply(provider, api_key, model, system, messages, max_output_tokens, temperature=None):
     """Yield text deltas from the given provider, then return a FinalReply."""
     return (
         yield from get_provider(provider).stream_reply(
-            api_key, model, system, messages, max_output_tokens
+            api_key, model, system, messages, max_output_tokens, temperature
         )
     )
 

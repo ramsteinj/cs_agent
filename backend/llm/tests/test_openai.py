@@ -150,3 +150,30 @@ def test_list_models_keeps_chat_models_only(client_cls):
 def test_is_chat_model():
     assert is_chat_model("chatgpt-4o-latest")
     assert not is_chat_model("gpt-4o-transcribe")
+
+
+@pytest.mark.parametrize(
+    ("model", "supported"),
+    [
+        ("gpt-4.1", True),
+        ("gpt-4o-mini", True),
+        ("chatgpt-4o-latest", True),
+        ("gpt-3.5-turbo", True),
+        ("o3", False),
+        ("o4-mini", False),
+        ("gpt-5", False),
+        ("gpt-test-1", False),
+    ],
+)
+def test_temperature_support(model, supported):
+    assert provider.supports_temperature(model) is supported
+
+
+def test_temperature_sent_only_when_supported(client_cls):
+    stream = _stream_returns(client_cls, [], _final())
+
+    run(provider.stream_reply("key", "gpt-4.1", "sys", [], 256, temperature=1.4))
+    assert stream.call_args.kwargs["temperature"] == 1.4
+
+    run(provider.stream_reply("key", "o4-mini", "sys", [], 256, temperature=1.4))
+    assert "temperature" not in stream.call_args.kwargs

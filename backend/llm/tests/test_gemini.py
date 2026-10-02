@@ -136,3 +136,23 @@ def test_list_models_keeps_generate_content_models(client_cls):
     )
 
     assert provider.list_models("key") == ["gemini-test-flash", "gemini-test-pro"]
+
+
+def test_temperature_is_supported_and_passed(client_cls):
+    assert provider.supports_temperature("gemini-test-pro") is True
+    assert provider.temperature_range == (0.0, 2.0)
+    stream = client_cls.return_value.models.generate_content_stream
+    stream.return_value = iter([_chunk("a", finish="STOP")])
+
+    run(provider.stream_reply("key", "gemini-test-pro", "sys", [], 512, temperature=0.7))
+
+    assert stream.call_args.kwargs["config"].temperature == 0.7
+
+
+def test_no_temperature_means_model_default(client_cls):
+    stream = client_cls.return_value.models.generate_content_stream
+    stream.return_value = iter([_chunk("a", finish="STOP")])
+
+    run(provider.stream_reply("key", "gemini-test-pro", "sys", [], 512))
+
+    assert stream.call_args.kwargs["config"].temperature is None

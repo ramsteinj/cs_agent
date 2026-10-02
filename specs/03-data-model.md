@@ -153,6 +153,7 @@ LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호
 | api_key_hint | CharField(32, blank) | 마스킹 표시용 (예: `sk-ant-...abcd`) |
 | api_key_updated_at | DateTimeField(null) | |
 | model | CharField(100, blank) | anthropic: `claude-opus-5-5`, openai/gemini: "" (관리자가 목록에서 선택) |
+| temperature | FloatField(null) | null — 모델 기본값 사용. 지원하지 않는 모델이면 저장돼 있어도 무시 |
 
 - `LLMProviderConfig.get(provider)` → `get_or_create` (기본 모델 적용)
 - 메서드 `set_api_key(plain)`, `get_api_key() -> str | None`(복호화 실패 시 None), `clear_api_key()`, 프로퍼티 `api_key_configured`, `ready`(키와 모델 모두 있음)

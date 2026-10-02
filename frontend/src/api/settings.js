@@ -27,6 +27,12 @@ export async function updateProviderModel(provider, model) {
   return data
 }
 
+/** temperature: number, or null for the model default */
+export async function updateProviderTemperature(provider, temperature) {
+  const { data } = await client.patch(`/admin/settings/providers/${provider}`, { temperature })
+  return data
+}
+
 export async function listProviderModels(provider) {
   const { data } = await client.get(`/admin/settings/providers/${provider}/models`)
   return data

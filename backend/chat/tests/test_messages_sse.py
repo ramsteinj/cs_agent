@@ -17,7 +17,7 @@ def _fake_reply(deltas, final_text=None, refused=False, error=None):
     """Replacement for llm.stream_reply recording its inputs."""
     calls = []
 
-    def stream_reply(provider, api_key, model, system, messages, max_output_tokens):
+    def stream_reply(provider, api_key, model, system, messages, max_output_tokens, temperature):
         calls.append(
             {
                 "provider": provider,
@@ -26,6 +26,7 @@ def _fake_reply(deltas, final_text=None, refused=False, error=None):
                 "system": system,
                 "messages": messages,
                 "max_output_tokens": max_output_tokens,
+                "temperature": temperature,
             }
         )
         yield from deltas
@@ -351,3 +352,17 @@ def test_llm_failure_is_logged_with_provider_error_summary(client, enabled, sess
 
     assert f"LLM call failed (provider=anthropic, model=claude-opus-5-5): {summary}" in caplog.text
     assert "sk-ant-api03-test-secret-WXYZ" not in caplog.text
+
+
+@pytest.mark.django_db
+def test_configured_temperature_is_passed_to_the_provider(client, enabled, session):
+    claude = LLMProviderConfig.get("anthropic")
+    claude.model = "claude-haiku-4-5"
+    claude.temperature = 0.2
+    claude.save()
+    reply, calls = _fake_reply(["네"])
+
+    with mock.patch("chat.services.llm.stream_reply", reply):
+        _events(_send(client, session))
+
+    assert calls[0]["temperature"] == 0.2

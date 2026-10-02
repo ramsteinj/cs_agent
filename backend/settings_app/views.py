@@ -10,7 +10,7 @@ from . import rag, services
 from .models import LLMProviderConfig, SystemSetting
 from .serializers import (
     ApiKeySerializer,
-    ProviderModelSerializer,
+    ProviderConfigSerializer,
     ProviderSerializer,
     RagSettingsSerializer,
     SystemSettingSerializer,
@@ -58,11 +58,16 @@ def provider_api_key(request, provider):
 @api_view(["PATCH"])
 def provider_config(request, provider):
     config = _config(provider)
-    serializer = ProviderModelSerializer(data=request.data)
+    serializer = ProviderConfigSerializer(data=request.data, context={"config": config})
     serializer.is_valid(raise_exception=True)
-    config.model = serializer.validated_data["model"]
-    config.save(update_fields=["model", "updated_at"])
-    audit("llm_model_updated", request.user, provider=provider, model=config.model)
+    data = serializer.validated_data
+    if "model" in data:
+        config.model = data["model"]
+        audit("llm_model_updated", request.user, provider=provider, model=config.model)
+    if "temperature" in data:
+        config.temperature = data["temperature"]
+        audit("llm_temperature_updated", request.user, provider=provider, value=config.temperature)
+    config.save(update_fields=["model", "temperature", "updated_at"])
     return Response(ProviderSerializer(config).data)
 
 

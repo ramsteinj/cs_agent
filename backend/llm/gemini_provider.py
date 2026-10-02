@@ -35,6 +35,9 @@ class GeminiProvider(Provider):
     default_model = ""  # chosen by the admin from the account's model list
     key_prefix = "AIza"
 
+    def supports_temperature(self, model):
+        return bool(model)  # every generateContent chat model accepts temperature
+
     def _client(self, api_key, timeout=TIMEOUT_SECONDS, attempts=MAX_RETRIES + 1):
         options = types.HttpOptions(
             timeout=int(timeout * 1000),  # milliseconds
@@ -72,7 +75,7 @@ class GeminiProvider(Provider):
                 ids.append(name)
         return sorted(ids)
 
-    def stream_reply(self, api_key, model, system, messages, max_output_tokens):
+    def stream_reply(self, api_key, model, system, messages, max_output_tokens, temperature=None):
         client = self._client(api_key)
         contents = [
             types.Content(
@@ -82,7 +85,9 @@ class GeminiProvider(Provider):
             for m in messages
         ]
         config = types.GenerateContentConfig(
-            system_instruction=system, max_output_tokens=max_output_tokens
+            system_instruction=system,
+            max_output_tokens=max_output_tokens,
+            temperature=self.effective_temperature(model, temperature),
         )
         last = None
         streamed = []
