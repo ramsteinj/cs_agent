@@ -29,6 +29,7 @@ psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 | `DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_SECURE_HSTS_SECONDS` / `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | `True` / `31536000` / `False` | `DJANGO_DEBUG=False`일 때만 적용 |
 | `EMBEDDING_BACKEND` | `sentence_transformers` / `fake` | 테스트는 `fake` |
 | `EMBEDDING_DIM` | `384` | 마이그레이션 차원과 일치해야 함 |
+| `EMBEDDING_PRELOAD` | `True` | 서버(WSGI/ASGI) 시작 시 임베딩 모델을 백그라운드로 미리 로드 |
 
 > 임베딩 모델, 청크 크기, 검색 개수·거리 등 RAG 튜닝 값은 환경 변수가 아니라 DB(관리자 화면 → RAG 설정)에서 관리한다 (specs/05 §1.1).
 

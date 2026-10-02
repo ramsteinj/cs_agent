@@ -70,7 +70,8 @@
 
 ### 2.3 임베딩 (`knowledge/embeddings.py`)
 - 모델: `SystemSetting.embedding_model` (DB). 차원: 환경 변수 `EMBEDDING_DIM`(기본 384).
-- `sentence-transformers` 로 로드, 모델별로 프로세스당 1회(lazy, thread-safe). 모델을 바꾸면 이전 모델은 메모리에서 내린다.
+- `sentence-transformers` 로 로드, 모델별로 프로세스당 1회(thread-safe). 모델을 바꾸면 이전 모델은 메모리에서 내린다.
+- **서버 시작 시 미리 로드**: `config/wsgi.py`·`config/asgi.py`가 `preload_in_background()`를 호출해 백그라운드 스레드에서 모델을 불러오고 한 번 인코딩해 둔다(서버는 즉시 요청을 받음, 로드 중 들어온 질문은 같은 로드를 기다림). 관리 명령(`migrate` 등)과 테스트에서는 로드하지 않는다. 실패하면 경고만 남기고 첫 사용 시 로드한다. 끄기: `EMBEDDING_PRELOAD=False`. (실측: 서버 시작 후 첫 질문 첫 응답 10.5초 → 1.5초)
 - e5 계열(모델명에 `e5` 포함) 규칙: 문서는 `"passage: " + text`, 질의는 `"query: " + text` 접두어. 그 외 모델은 접두어 없음. 항상 `normalize_embeddings=True`.
 - 인터페이스: `embed_passages(texts: list[str]) -> list[list[float]]`, `embed_query(text: str) -> list[float]`.
 - 테스트에서는 결정적 가짜 임베딩(`FakeEmbedder`)으로 교체 가능하도록 설정 `EMBEDDING_BACKEND=fake` 지원.
@@ -161,7 +162,12 @@ LLM 호출은 `backend/llm/` 패키지에서만 한다. 공급자마다 같은 �
 ```
 
 ### 4.4 출처
-- `done` 이벤트의 `sources` 는 검색된 청크의 출처(중복 제거, 최대 `max_sources`개, 기본 3)를 반환한다. 프론트는 답변 아래 "참고: OK클라우드" 형태로 표시.
+- `done` 이벤트의 `sources` 는 **답변에 실제로 쓰인** 출처만 반환한다 (`chat/sources.py`, 검색 순서 유지, 중복 제거, 최대 `max_sources`개, 기본 3). 프론트는 답변 아래 "참고: OK클라우드" 형태로 표시.
+  - 배경: 검색은 항상 Top-K를 돌려주고 e5 임베딩은 무관한 청크도 거리가 비슷해(§1.1 참고), 검색 결과를 그대로 출처로 쓰면 답변에 없는 제품이 표시된다.
+  - 제품 청크: 답변에 제품명이 나오면 사용된 것으로 본다.
+  - 회사 청크: 회사명(괄호 속 설명 제외, 예: "오케이테크 (샘플)" → "오케이테크"), 전화번호(숫자만 비교, 7자리 이상), 이메일, 웹사이트 호스트 중 하나가 나오면 사용된 것으로 본다.
+  - 비교는 공백 무시·대소문자 무시. 아무것도 일치하지 않으면(예: 이름을 번역한 영어 답변) 가장 관련 높은 출처 1개만 표시한다.
+  - 새로고침 복원 시에도 저장된 답변과 검색 청크로 같은 규칙을 적용한다. 거절 답변은 출처 없음.
 
 ## 5. 품질 확인 체크리스트
 - [ ] 등록된 제품 가격 질문에 정확한 가격을 답한다.

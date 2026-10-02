@@ -114,6 +114,9 @@ FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default="")
 # (SystemSetting) and are edited in the admin UI (specs/05 §1.1).
 EMBEDDING_BACKEND = env("EMBEDDING_BACKEND", default="sentence_transformers")  # or "fake"
 EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=384)  # VectorField size: needs a migration
+# Load the embedding model in the background when the WSGI/ASGI app starts, so the first
+# customer question does not wait for it (management commands and tests never preload).
+EMBEDDING_PRELOAD = env.bool("EMBEDDING_PRELOAD", default=True)
 
 # Chat input / abuse limits (specs/07 §4)
 CHAT_MESSAGE_MAX_LENGTH = 1000

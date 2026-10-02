@@ -10,6 +10,7 @@ import logging
 import math
 import re
 import threading
+import time
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -144,3 +145,32 @@ def embed_query(text):
 
 def model_name():
     return get_embedder().model_name
+
+
+def preload_in_background():
+    """Start loading the configured model in a daemon thread (called by wsgi/asgi).
+
+    Requests that arrive while it loads wait for the same model instead of loading a
+    second copy. Returns the thread, or None when preloading is off or not needed.
+    """
+    if settings.EMBEDDING_BACKEND == "fake" or not settings.EMBEDDING_PRELOAD:
+        return None
+    thread = threading.Thread(target=_preload, name="embedding-preload", daemon=True)
+    thread.start()
+    return thread
+
+
+def _preload():
+    from django.db import connection
+
+    started = time.monotonic()
+    try:
+        embedder = get_embedder()
+        embedder.embed_query("warm-up")  # the first encode is slow too
+        logger.info(
+            "Embedding model %s preloaded in %.1fs", embedder.model_name, time.monotonic() - started
+        )
+    except Exception:
+        logger.warning("Embedding model preload failed; it will load on first use", exc_info=True)
+    finally:
+        connection.close()  # this thread's DB connection (reading the model name)

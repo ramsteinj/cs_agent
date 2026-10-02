@@ -16,6 +16,7 @@ from settings_app.models import SystemSetting
 
 from .models import ChatMessage, ChatSession
 from .prompts import build_system_prompt, build_user_content
+from .sources import select_sources
 
 logger = logging.getLogger(__name__)
 
@@ -86,24 +87,7 @@ def search_query(session, question, before_id, with_previous=True):
     return f"{previous}\n{question}" if previous else question
 
 
-def sources_for(chunks, limit):
-    """Unique sources in relevance order, at most `limit`."""
-    sources, seen = [], set()
-    if limit <= 0:
-        return sources
-    for chunk in chunks:
-        key = (chunk.source_type, chunk.source_id)
-        if key in seen:
-            continue
-        seen.add(key)
-        title = chunk.product.name if chunk.product_id else chunk.company.name
-        sources.append({"type": chunk.source_type, "id": chunk.source_id, "title": title})
-        if len(sources) == limit:
-            break
-    return sources
-
-
-def sources_from_ids(chunk_ids, limit):
+def sources_from_ids(chunk_ids, answer_text, limit):
     """Rebuild sources for stored messages; chunks re-created by later edits are skipped."""
     chunks = {
         c.pk: c
@@ -111,7 +95,7 @@ def sources_from_ids(chunk_ids, limit):
             "company", "product"
         )
     }
-    return sources_for([chunks[i] for i in chunk_ids if i in chunks], limit)
+    return select_sources([chunks[i] for i in chunk_ids if i in chunks], answer_text, limit)
 
 
 # --- Turn --------------------------------------------------------------------
@@ -189,7 +173,7 @@ def answer_stream(session, question):
     assistant.output_tokens = final.output_tokens
     assistant.save()
 
-    sources = [] if final.refused else sources_for(chunks, setting.max_sources)
+    sources = [] if final.refused else select_sources(chunks, final.text, setting.max_sources)
     done = {"type": "done", "sources": sources}
     if final.text != "".join(streamed):
         # e.g. refusal after partial output: the client must replace what it showed.
@@ -218,6 +202,6 @@ def public_messages(session):
             "created_at": message.created_at,
         }
         if message.role == ChatMessage.Role.ASSISTANT:
-            item["sources"] = sources_from_ids(message.retrieved_chunk_ids, limit)
+            item["sources"] = sources_from_ids(message.retrieved_chunk_ids, message.content, limit)
         result.append(item)
     return result
