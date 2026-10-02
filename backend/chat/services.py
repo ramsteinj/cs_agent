@@ -92,7 +92,7 @@ def sources_from_ids(chunk_ids, answer_text, limit):
     chunks = {
         c.pk: c
         for c in KnowledgeChunk.objects.filter(pk__in=chunk_ids).select_related(
-            "company", "product"
+            "company", "product", "document"
         )
     }
     return select_sources([chunks[i] for i in chunk_ids if i in chunks], answer_text, limit)

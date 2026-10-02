@@ -69,6 +69,7 @@ LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | product | FK(Product, CASCADE, related_name="documents") | |
+| title | CharField(200, blank) | 문서 제목(종류). 예: 사용자 매뉴얼, 빠른 설치 가이드. 비면 파일명으로 표시 |
 | file_name | CharField(255) | 원본 파일명 (경로 제거) |
 | file_type | CharField(choices: `txt`, `docx`, `pdf`) | |
 | file_size | PositiveIntegerField | 바이트 |
@@ -84,6 +85,7 @@ LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호
 | source_id | PositiveIntegerField | 출처 PK |
 | company | FK(Company, CASCADE) | 검색 필터/연쇄 삭제용 |
 | product | FK(Product, CASCADE, null) | 제품 청크일 때만 |
+| document | FK(ProductDocument, CASCADE, null) | 제품 문서에서 나온 청크일 때만 (출처 표시용) |
 | chunk_index | PositiveIntegerField | 출처 내 순번 |
 | content | TextField | 청크 원문 (프롬프트에 그대로 들어감) |
 | embedding | `pgvector.django.VectorField(dimensions=EMBEDDING_DIM)` | 기본 384 |

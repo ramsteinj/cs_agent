@@ -23,7 +23,7 @@ def search(query_text, top_k=None, max_distance=None):
     query_vector = embeddings.embed_query(query_text)
     return list(
         KnowledgeChunk.objects.filter(is_searchable=True)
-        .select_related("company", "product")
+        .select_related("company", "product", "document")
         .annotate(distance=CosineDistance("embedding", query_vector))
         .filter(distance__lte=max_distance)
         .order_by("distance")[:top_k]

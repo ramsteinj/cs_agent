@@ -36,15 +36,15 @@ def _chunk_settings():
 
 
 def _make_chunks(source_type, source, company, product, sections, searchable):
-    """Chunk every (header, body) section, embed them in one batch, number them in order."""
+    """Chunk every (header, body, document) section, embed them in one batch, number them."""
     max_chars, overlap = _chunk_settings()
-    texts = [
-        text
-        for header, body in sections
+    pieces = [
+        (text, document)
+        for header, body, document in sections
         for text in chunk_text(header, body, max_chars=max_chars, overlap=overlap)
     ]
     try:
-        vectors = embeddings.embed_passages(texts)
+        vectors = embeddings.embed_passages([text for text, _ in pieces])
         model_name = embeddings.model_name()
     except embeddings.EmbeddingError:  # ImproperlyConfigured (wrong dimension) propagates
         logger.exception("Embedding failed for %s:%s", source_type, source.pk)
@@ -55,13 +55,14 @@ def _make_chunks(source_type, source, company, product, sections, searchable):
             source_id=source.pk,
             company=company,
             product=product,
+            document=document,
             chunk_index=index,
             content=text,
             embedding=vector,
             embedding_model=model_name,
             is_searchable=searchable,
         )
-        for index, (text, vector) in enumerate(zip(texts, vectors, strict=True))
+        for index, ((text, document), vector) in enumerate(zip(pieces, vectors, strict=True))
     ]
 
 
@@ -73,9 +74,9 @@ def _replace(source_type, source_id, chunks):
 
 def reindex_product(product):
     """Product fields first, then each uploaded document (specs/05 §2.1)."""
-    sections = [product_document(product)]
+    sections = [(*product_document(product), None)]
     sections += [
-        (document_header(product, document.file_name), document.text)
+        (document_header(product, document), document.text, document)
         for document in product.documents.all()
     ]
     chunks = _make_chunks(
@@ -96,7 +97,7 @@ def reindex_company(company, include_products=True):
         company,
         company,
         None,
-        [company_document(company)],
+        [(*company_document(company), None)],
         searchable=True,
     )
     count = _replace(KnowledgeChunk.SourceType.COMPANY, company.pk, chunks)

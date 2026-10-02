@@ -16,6 +16,7 @@ from .indexing import reindex_all, reindex_product
 from .models import Company, KnowledgeChunk, Product, ProductDocument
 from .serializers import (
     CompanySerializer,
+    DocumentTitleSerializer,
     DocumentUploadSerializer,
     ProductDocumentSerializer,
     ProductSerializer,
@@ -111,6 +112,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             document = ProductDocument.objects.create(
                 product=product,
+                title=upload.validated_data.get("title", "").strip(),
                 file_name=file_name,
                 file_type=file_type,
                 file_size=file_size,
@@ -126,10 +128,27 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
         return Response(ProductDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=["delete"], url_path=r"documents/(?P<document_id>\d+)")
-    def delete_document(self, request, pk=None, document_id=None):
+    @action(detail=True, methods=["patch", "delete"], url_path=r"documents/(?P<document_id>\d+)")
+    def document_detail(self, request, pk=None, document_id=None):
+        """PATCH: change the document title. DELETE: remove it. Both reindex the product."""
         product = self.get_object()
         document = get_object_or_404(ProductDocument, pk=document_id, product=product)
+        if request.method == "PATCH":
+            serializer = DocumentTitleSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            with transaction.atomic():
+                document.title = serializer.validated_data["title"].strip()
+                document.save(update_fields=["title", "updated_at"])
+                reindex_product(product)
+            audit(
+                "product_document_renamed",
+                request.user,
+                product=product.pk,
+                document=document.pk,
+                title=document.title,
+            )
+            return Response(ProductDocumentSerializer(document).data)
+
         with transaction.atomic():
             document.delete()
             reindex_product(product)

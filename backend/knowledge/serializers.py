@@ -98,11 +98,14 @@ class ProductDocumentSerializer(serializers.ModelSerializer):
 
     char_count = serializers.SerializerMethodField()
     preview = serializers.SerializerMethodField()
+    display_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = ProductDocument
         fields = [
             "id",
+            "title",
+            "display_name",
             "file_name",
             "file_type",
             "file_size",
@@ -121,3 +124,8 @@ class ProductDocumentSerializer(serializers.ModelSerializer):
 
 class DocumentUploadSerializer(serializers.Serializer):
     file = serializers.FileField(allow_empty_file=False)
+    title = serializers.CharField(max_length=200, required=False, allow_blank=True)
+
+
+class DocumentTitleSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=200, allow_blank=True)

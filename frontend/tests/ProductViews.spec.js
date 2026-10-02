@@ -146,7 +146,7 @@ describe('ProductFormView documents (Text / Word / PDF)', () => {
     expect(knowledgeApi.createProduct).toHaveBeenCalledWith(
       expect.objectContaining({ name: '문서 제품', description: '' }),
     )
-    expect(knowledgeApi.uploadProductDocument).toHaveBeenCalledWith(9, file)
+    expect(knowledgeApi.uploadProductDocument).toHaveBeenCalledWith(9, file, '')
     expect(router.currentRoute.value.path).toBe('/admin/products')
   })
 
@@ -212,7 +212,15 @@ describe('ProductFormView documents (Text / Word / PDF)', () => {
       is_active: true,
     })
     knowledgeApi.listProductDocuments.mockResolvedValue([
-      { id: 3, file_name: '요금.docx', file_type: 'docx', file_size: 2048, char_count: 1200 },
+      {
+        id: 3,
+        title: '',
+        display_name: '요금.docx',
+        file_name: '요금.docx',
+        file_type: 'docx',
+        file_size: 2048,
+        char_count: 1200,
+      },
     ])
     knowledgeApi.deleteProductDocument.mockResolvedValue()
     const { wrapper } = await mountRoute(ProductFormView, {
@@ -229,5 +237,114 @@ describe('ProductFormView documents (Text / Word / PDF)', () => {
 
     expect(knowledgeApi.deleteProductDocument).toHaveBeenCalledWith('5', 3)
     expect(wrapper.find('[data-test="document-list"]').exists()).toBe(false)
+  })
+})
+
+describe('ProductFormView document titles', () => {
+  const EDIT_PRODUCT = {
+    id: 5,
+    company: 1,
+    name: '오케이드라이브',
+    category: '',
+    summary: '',
+    description: '',
+    price: '',
+    features: '',
+    usage_guide: '',
+    faq: '',
+    is_active: true,
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    document.body.innerHTML = ''
+    knowledgeApi.listAllCompanies.mockResolvedValue(COMPANIES)
+    knowledgeApi.listCategories.mockResolvedValue([])
+    knowledgeApi.getProduct.mockResolvedValue(EDIT_PRODUCT)
+  })
+
+  async function mountEdit(documents) {
+    knowledgeApi.listProductDocuments.mockResolvedValue(documents)
+    return mountRoute(ProductFormView, {
+      path: '/admin/products/5/edit',
+      pattern: '/admin/products/:id/edit',
+    })
+  }
+
+  it('uploads several files for one product, each with its own title', async () => {
+    knowledgeApi.updateProduct.mockResolvedValue({ id: 5 })
+    knowledgeApi.uploadProductDocument.mockImplementation(async (_id, file, title) => ({
+      id: file.name.length,
+      title,
+      display_name: title || file.name,
+      file_name: file.name,
+      file_type: 'pdf',
+      file_size: 1,
+      char_count: 1,
+    }))
+    const { wrapper } = await mountEdit([])
+    const manual = new File(['%PDF'], 'manual.pdf')
+    const guide = new File(['%PDF'], 'install.pdf')
+    const input = wrapper.get('#product-files')
+    Object.defineProperty(input.element, 'files', { value: [manual, guide], configurable: true })
+    await input.trigger('change')
+
+    const titles = wrapper.findAll('[data-test="pending-title"]')
+    expect(titles[0].attributes('list')).toBe('document-title-options')
+    await titles[0].setValue('사용자 매뉴얼')
+    await titles[1].setValue('빠른 설치 가이드')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(knowledgeApi.uploadProductDocument.mock.calls.map((c) => c.slice(1))).toEqual([
+      [manual, '사용자 매뉴얼'],
+      [guide, '빠른 설치 가이드'],
+    ])
+  })
+
+  it('suggests common document types', async () => {
+    const { wrapper } = await mountEdit([])
+
+    const options = wrapper
+      .findAll('#document-title-options option')
+      .map((o) => o.attributes('value'))
+    expect(options).toContain('사용자 매뉴얼')
+    expect(options).toContain('빠른 설치 가이드')
+  })
+
+  it('shows the title with the file name and renames a document', async () => {
+    knowledgeApi.updateDocumentTitle.mockResolvedValue({
+      id: 3,
+      title: '빠른 설치 가이드',
+      display_name: '빠른 설치 가이드',
+      file_name: 'install.pdf',
+      file_type: 'pdf',
+      file_size: 10,
+      char_count: 5,
+    })
+    const { wrapper } = await mountEdit([
+      {
+        id: 3,
+        title: '',
+        display_name: 'install.pdf',
+        file_name: 'install.pdf',
+        file_type: 'pdf',
+        file_size: 10,
+        char_count: 5,
+      },
+    ])
+    const save = () => wrapper.get('[data-test="save-document-title"]')
+    expect(save().attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-test="document-title"]').setValue('빠른 설치 가이드')
+    expect(save().attributes('disabled')).toBeUndefined()
+    await save().trigger('click')
+    await flushPromises()
+
+    expect(knowledgeApi.updateDocumentTitle).toHaveBeenCalledWith('5', 3, '빠른 설치 가이드')
+    const list = wrapper.get('[data-test="document-list"]').text()
+    expect(list).toContain('빠른 설치 가이드')
+    expect(list).toContain('install.pdf')
+    expect(save().attributes('disabled')).toBeDefined()
   })
 })

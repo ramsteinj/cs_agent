@@ -78,11 +78,19 @@ export async function listProductDocuments(productId) {
   return data
 }
 
-export async function uploadProductDocument(productId, file) {
+export async function uploadProductDocument(productId, file, title = '') {
   const form = new FormData()
   form.append('file', file)
+  if (title.trim()) form.append('title', title.trim())
   const { data } = await client.post(`/admin/products/${productId}/documents`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function updateDocumentTitle(productId, documentId, title) {
+  const { data } = await client.patch(`/admin/products/${productId}/documents/${documentId}`, {
+    title,
   })
   return data
 }

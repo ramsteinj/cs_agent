@@ -114,12 +114,13 @@ Product 응답 예 (`description`은 선택 — 문서만으로 등록 가능):
 | Method | Path | 설명 |
 |---|---|---|
 | GET | `/api/admin/products/{id}/documents` | 문서 목록 |
-| POST | `/api/admin/products/{id}/documents` | `multipart/form-data`, 필드 `file` 1개 → 텍스트 추출 → 201, 제품 재색인 |
+| POST | `/api/admin/products/{id}/documents` | `multipart/form-data`, 필드 `file` 1개 + 선택 `title`(200자) → 텍스트 추출 → 201, 제품 재색인 |
+| PATCH | `/api/admin/products/{id}/documents/{document_id}` | 제목 변경 `{"title": "빠른 설치 가이드"}` → 200, 제품 재색인 |
 | DELETE | `/api/admin/products/{id}/documents/{document_id}` | 삭제 → 204, 제품 재색인 |
 
 Document 응답 예 (본문 전체는 반환하지 않음):
 ```json
-{ "id": 3, "file_name": "가격표.pdf", "file_type": "pdf", "file_size": 183204,
+{ "id": 3, "title": "가격표", "display_name": "가격표", "file_name": "가격표.pdf", "file_type": "pdf", "file_size": 183204,
   "char_count": 5120, "preview": "앞 200자...", "created_at": "..." }
 ```
 - 허용: `.txt`(UTF-8, 실패 시 CP949), `.docx`, `.pdf`. 확장자와 파일 시그니처를 모두 확인한다.

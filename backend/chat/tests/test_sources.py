@@ -57,8 +57,12 @@ def test_english_answer_with_korean_name_in_parentheses():
 
 
 def test_company_matched_by_name_without_bracketed_note():
-    assert titles([DRIVE, COMPANY_CHUNK], "오케이테크의 환불 정책은 7일 이내입니다.") == [
+    assert titles([COMPANY_CHUNK, DRIVE], "오케이테크의 환불 정책은 7일 이내입니다.") == [
         "오케이테크 (샘플)"
+    ]
+    assert titles([DRIVE, COMPANY_CHUNK], "오케이테크의 정책입니다.") == [
+        "오케이드라이브",
+        "오케이테크 (샘플)",
     ]
 
 
@@ -72,7 +76,7 @@ def test_company_matched_by_name_without_bracketed_note():
     ],
 )
 def test_company_matched_by_contact_details(answer):
-    assert titles([DRIVE, COMPANY_CHUNK], answer) == ["오케이테크 (샘플)"]
+    assert titles([CALENDAR, COMPANY_CHUNK], answer) == ["오케이캘린더", "오케이테크 (샘플)"]
 
 
 def test_unrelated_numbers_do_not_match_the_phone():
@@ -82,12 +86,36 @@ def test_unrelated_numbers_do_not_match_the_phone():
 
 
 def test_names_ignore_spacing():
+    # CALENDAR is not the top hit, so it is shown only because "오케이 캘린더" matches.
     assert titles([DRIVE, CALENDAR], "오케이 캘린더는 14일 무료 체험을 제공합니다.") == [
-        "오케이캘린더"
+        "오케이드라이브",
+        "오케이캘린더",
     ]
 
 
-def test_nothing_matched_falls_back_to_the_most_relevant_source():
+def test_most_relevant_source_is_always_shown():
+    # Real Opus 5.5 answer to "오케이드라이브에서 이전 버전으로 되돌릴 수 있나요?"
+    # (the manual chunk was the top hit; the answer never repeats the product name)
+    manual = SimpleNamespace(
+        source_type="product",
+        source_id=1,
+        product_id=1,
+        document_id=8,
+        document=SimpleNamespace(display_name="사용자 매뉴얼"),
+        product=SimpleNamespace(name="오케이드라이브"),
+        company=COMPANY,
+    )
+    answer = (
+        "네, 가능합니다. 파일 정보에서 30일 이내 버전으로 복원할 수 있습니다. 전화: 02-1234-5678"
+    )
+
+    assert titles([manual, CALENDAR, COMPANY_CHUNK], answer) == [
+        "오케이드라이브 · 사용자 매뉴얼",
+        "오케이테크 (샘플)",
+    ]
+
+
+def test_translated_names_keep_only_the_most_relevant_source():
     assert titles([CALENDAR, DRIVE], "It has a 14-day free trial.") == ["오케이캘린더"]
 
 
@@ -104,3 +132,20 @@ def test_keeps_retrieval_order_dedupes_and_limits():
 def test_empty_inputs():
     assert select_sources([], "아무 답", 3) == []
     assert select_sources([DRIVE], "오케이드라이브", 0) == []
+
+
+def test_document_chunk_source_shows_the_document_title():
+    guide = SimpleNamespace(display_name="빠른 설치 가이드")
+    chunk = SimpleNamespace(
+        source_type="product",
+        source_id=1,
+        product_id=1,
+        document_id=7,
+        document=guide,
+        product=SimpleNamespace(name="오케이드라이브"),
+        company=COMPANY,
+    )
+
+    assert titles([chunk, DRIVE], "오케이드라이브는 3단계로 설치합니다.") == [
+        "오케이드라이브 · 빠른 설치 가이드"
+    ]

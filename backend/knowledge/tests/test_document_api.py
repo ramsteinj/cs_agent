@@ -17,8 +17,11 @@ def _url(product, document=None):
     return f"{base}/{document.pk}" if document else base
 
 
-def _upload(client, product, name, data):
-    return client.post(_url(product), {"file": SimpleUploadedFile(name, data)}, format="multipart")
+def _upload(client, product, name, data, title=None):
+    payload = {"file": SimpleUploadedFile(name, data)}
+    if title is not None:
+        payload["title"] = title
+    return client.post(_url(product), payload, format="multipart")
 
 
 @pytest.fixture
@@ -141,3 +144,72 @@ class TestDocumentApi:
         )
 
         assert response.status_code == 201
+
+
+@pytest.mark.django_db
+class TestDocumentTitles:
+    def test_several_titled_documents_for_one_product(self, admin_client, product):
+        manual = _upload(
+            admin_client, product, "manual.txt", "전체 기능 설명".encode(), "사용자 매뉴얼"
+        )
+        guide = _upload(
+            admin_client, product, "install.pdf", make_pdf("Install in 3 steps"), "빠른 설치 가이드"
+        )
+
+        assert (manual.status_code, guide.status_code) == (201, 201)
+        assert guide.json()["title"] == "빠른 설치 가이드"
+        assert guide.json()["display_name"] == "빠른 설치 가이드"
+        headers = {
+            c.content.splitlines()[0] for c in KnowledgeChunk.objects.filter(document__isnull=False)
+        }
+        assert headers == {
+            "[제품] 오케이드라이브 (오케이테크) / 문서: 사용자 매뉴얼 (manual.txt)",
+            "[제품] 오케이드라이브 (오케이테크) / 문서: 빠른 설치 가이드 (install.pdf)",
+        }
+
+    def test_document_chunks_point_to_their_document(self, admin_client, product):
+        _upload(admin_client, product, "manual.txt", b"hello", "사용자 매뉴얼")
+        document = ProductDocument.objects.get()
+
+        chunks = KnowledgeChunk.objects.filter(product=product)
+        assert chunks.filter(document=document).exists()
+        assert chunks.filter(document__isnull=True).count() == 1  # product fields chunk
+
+    def test_untitled_document_uses_the_file_name(self, admin_client, product):
+        body = _upload(admin_client, product, "a.txt", b"hello").json()
+
+        assert (body["title"], body["display_name"]) == ("", "a.txt")
+        assert KnowledgeChunk.objects.filter(
+            content__startswith="[제품] 오케이드라이브 (오케이테크) / 문서: a.txt\n"
+        ).exists()
+
+    def test_rename_updates_chunk_headers(self, admin_client, product, caplog):
+        _upload(admin_client, product, "install.pdf", make_pdf("Install in 3 steps"))
+        document = ProductDocument.objects.get()
+
+        response = admin_client.patch(
+            _url(product, document), {"title": "빠른 설치 가이드"}, format="json"
+        )
+
+        assert response.status_code == 200
+        assert response.json()["display_name"] == "빠른 설치 가이드"
+        chunk = KnowledgeChunk.objects.get(document=document)
+        assert chunk.content.startswith(
+            "[제품] 오케이드라이브 (오케이테크) / 문서: 빠른 설치 가이드 (install.pdf)"
+        )
+        assert "event=product_document_renamed" in caplog.text
+
+    def test_title_length_limit(self, admin_client, product):
+        response = _upload(admin_client, product, "a.txt", b"x", "가" * 201)
+
+        assert response.status_code == 400
+        assert "title" in response.json()["error"]["details"]
+
+    def test_product_names_stay_unique_per_company(self, admin_client, product):
+        response = admin_client.post(
+            "/api/admin/products",
+            {"company": product.company.pk, "name": product.name},
+            format="json",
+        )
+
+        assert response.status_code == 409

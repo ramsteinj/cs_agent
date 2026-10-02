@@ -2,11 +2,12 @@
 
 Retrieval always returns the top-K chunks, and with e5 embeddings unrelated chunks are
 nearly as close as relevant ones, so listing every retrieved chunk shows products the
-answer never mentioned. A retrieved source is shown only if the answer refers to it:
-  - product chunk: the product name appears in the answer
-  - company chunk: the company name, phone number, email or website appears
-If nothing matches (e.g. names translated in an English answer), the most relevant
-retrieved source is shown alone.
+answer never mentioned. Shown sources:
+  - the most relevant retrieved source, always (answers often don't repeat the product
+    name, e.g. "네, 가능합니다" to a question about one product's manual)
+  - any other retrieved source the answer refers to:
+      product chunk: the product name appears in the answer
+      company chunk: the company name, phone number, email or website appears
 """
 
 import re
@@ -65,7 +66,13 @@ def _is_used(chunk, answer):
 
 
 def _source(chunk):
-    title = chunk.product.name if chunk.product_id else chunk.company.name
+    if chunk.product_id:
+        title = chunk.product.name
+        if getattr(chunk, "document_id", None):
+            # The product's most relevant chunk came from one of its documents.
+            title = f"{title} · {chunk.document.display_name}"
+    else:
+        title = chunk.company.name
     return {"type": chunk.source_type, "id": chunk.source_id, "title": title}
 
 
@@ -79,5 +86,5 @@ def select_sources(chunks, answer_text, limit):
     candidates = list(first_chunk_per_source.values())
 
     answer = _Answer(answer_text)
-    used = [chunk for chunk in candidates if _is_used(chunk, answer)] or candidates[:1]
+    used = candidates[:1] + [chunk for chunk in candidates[1:] if _is_used(chunk, answer)]
     return [_source(chunk) for chunk in used[:limit]]

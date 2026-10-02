@@ -48,9 +48,9 @@ def product_document(product):
     return header, "\n".join(lines)
 
 
-def document_header(product, file_name):
+def document_header(product, document):
     """Header for chunks of an uploaded product document."""
-    return f"[제품] {product.name} ({product.company.name}) / 문서: {file_name}"
+    return f"[제품] {product.name} ({product.company.name}) / 문서: {document.header_label}"
 
 
 def _sentences(body):

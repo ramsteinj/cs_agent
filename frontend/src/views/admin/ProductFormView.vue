@@ -21,7 +21,19 @@ const isEdit = computed(() => Boolean(productId.value))
 const ACCEPTED = ['txt', 'docx', 'pdf']
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 const documents = ref([])
-const pendingFiles = ref([]) // { key, file, error }
+const pendingFiles = ref([]) // { key, file, title, error }
+// Suggested document types; any title can be typed (specs/06 §5.6).
+const TITLE_SUGGESTIONS = [
+  '사용자 매뉴얼',
+  '빠른 설치 가이드',
+  '제품 소개서',
+  '가격표',
+  'FAQ',
+  '릴리스 노트',
+  '기술 사양서',
+]
+const titleDrafts = reactive({}) // document id -> edited title
+const savingTitle = ref(null)
 const fileErrors = ref([])
 const pendingDelete = ref(null)
 let nextFileKey = 1
@@ -91,7 +103,7 @@ function addFiles(event) {
     } else if (file.size > MAX_FILE_BYTES) {
       fileErrors.value.push(`${file.name}: 10MB 이하 파일만 올릴 수 있습니다.`)
     } else {
-      pendingFiles.value.push({ key: nextFileKey++, file, error: '' })
+      pendingFiles.value.push({ key: nextFileKey++, file, title: '', error: '' })
     }
   }
   event.target.value = '' // allow choosing the same file again
@@ -107,7 +119,9 @@ async function uploadPending() {
   for (const item of [...pendingFiles.value]) {
     item.error = ''
     try {
-      documents.value.push(await knowledgeApi.uploadProductDocument(productId.value, item.file))
+      documents.value.push(
+        await knowledgeApi.uploadProductDocument(productId.value, item.file, item.title),
+      )
       removePending(item)
     } catch (err) {
       item.error = getErrorMessage(err)
@@ -115,6 +129,28 @@ async function uploadPending() {
     }
   }
   return failed
+}
+
+function titleChanged(doc) {
+  return doc.id in titleDrafts && titleDrafts[doc.id].trim() !== doc.title
+}
+
+async function saveTitle(doc) {
+  savingTitle.value = doc.id
+  try {
+    const updated = await knowledgeApi.updateDocumentTitle(
+      productId.value,
+      doc.id,
+      titleDrafts[doc.id].trim(),
+    )
+    Object.assign(doc, updated)
+    delete titleDrafts[doc.id]
+    toast.show('문서 제목을 변경했습니다.')
+  } catch (err) {
+    toast.show(getErrorMessage(err), 'danger')
+  } finally {
+    savingTitle.value = null
+  }
 }
 
 async function confirmDeleteDocument() {
@@ -269,26 +305,51 @@ const textareas = [
           이미지 PDF·구형 .doc 제외)
         </p>
 
+        <datalist id="document-title-options">
+          <option v-for="t in TITLE_SUGGESTIONS" :key="t" :value="t" />
+        </datalist>
+
         <ul v-if="documents.length" class="list-group mb-2" data-test="document-list">
-          <li
-            v-for="doc in documents"
-            :key="doc.id"
-            class="list-group-item d-flex align-items-center gap-2"
-          >
-            <span class="badge bg-secondary text-uppercase">{{ doc.file_type }}</span>
-            <span class="text-break flex-grow-1">{{ doc.file_name }}</span>
-            <small class="text-muted text-nowrap">
-              {{ formatSize(doc.file_size) }} · {{ doc.char_count.toLocaleString() }}자
-            </small>
-            <button
-              type="button"
-              class="btn btn-outline-danger btn-sm"
-              :aria-label="`${doc.file_name} 삭제`"
-              data-test="delete-document"
-              @click="pendingDelete = doc"
-            >
-              삭제
-            </button>
+          <li v-for="doc in documents" :key="doc.id" class="list-group-item">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <span class="badge bg-secondary text-uppercase">{{ doc.file_type }}</span>
+              <strong class="text-break">{{ doc.display_name }}</strong>
+              <small v-if="doc.title" class="text-muted text-break">{{ doc.file_name }}</small>
+              <small class="text-muted text-nowrap ms-auto">
+                {{ formatSize(doc.file_size) }} · {{ doc.char_count.toLocaleString() }}자
+              </small>
+              <button
+                type="button"
+                class="btn btn-outline-danger btn-sm"
+                :aria-label="`${doc.display_name} 삭제`"
+                data-test="delete-document"
+                @click="pendingDelete = doc"
+              >
+                삭제
+              </button>
+            </div>
+            <div class="input-group input-group-sm mt-2">
+              <label :for="`doc-title-${doc.id}`" class="input-group-text">문서 제목</label>
+              <input
+                :id="`doc-title-${doc.id}`"
+                class="form-control"
+                list="document-title-options"
+                maxlength="200"
+                placeholder="예: 사용자 매뉴얼"
+                :value="doc.id in titleDrafts ? titleDrafts[doc.id] : doc.title"
+                data-test="document-title"
+                @input="titleDrafts[doc.id] = $event.target.value"
+              />
+              <button
+                type="button"
+                class="btn btn-outline-primary"
+                :disabled="!titleChanged(doc) || savingTitle === doc.id"
+                data-test="save-document-title"
+                @click="saveTitle(doc)"
+              >
+                제목 저장
+              </button>
+            </div>
           </li>
         </ul>
 
@@ -306,6 +367,18 @@ const textareas = [
               >
                 제외
               </button>
+            </div>
+            <div class="input-group input-group-sm mt-2">
+              <label :for="`pending-title-${item.key}`" class="input-group-text">문서 제목</label>
+              <input
+                :id="`pending-title-${item.key}`"
+                v-model="item.title"
+                class="form-control"
+                list="document-title-options"
+                maxlength="200"
+                placeholder="예: 빠른 설치 가이드 (비우면 파일명)"
+                data-test="pending-title"
+              />
             </div>
             <div v-if="item.error" class="text-danger small mt-1" data-test="upload-error">
               {{ item.error }}
@@ -358,7 +431,7 @@ const textareas = [
       title="문서 삭제"
       :message="
         pendingDelete
-          ? `'${pendingDelete.file_name}' 문서를 삭제하시겠습니까? 이 문서의 내용은 챗봇 답변에 더 이상 사용되지 않습니다.`
+          ? `'${pendingDelete.display_name}' 문서를 삭제하시겠습니까? 이 문서의 내용은 챗봇 답변에 더 이상 사용되지 않습니다.`
           : ''
       "
       confirm-text="삭제"

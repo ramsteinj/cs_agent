@@ -55,6 +55,7 @@ class ProductDocument(TimeStampedModel):
         PDF = "pdf", "PDF"
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="documents")
+    title = models.CharField(max_length=200, blank=True)  # e.g. 사용자 매뉴얼, 빠른 설치 가이드
     file_name = models.CharField(max_length=255)
     file_type = models.CharField(max_length=10, choices=FileType.choices)
     file_size = models.PositiveIntegerField()
@@ -64,7 +65,16 @@ class ProductDocument(TimeStampedModel):
         ordering = ["created_at", "id"]
 
     def __str__(self):
-        return self.file_name
+        return self.display_name
+
+    @property
+    def display_name(self):
+        return self.title or self.file_name
+
+    @property
+    def header_label(self):
+        """Label used in chunk headers: "빠른 설치 가이드 (install.pdf)" or the file name."""
+        return f"{self.title} ({self.file_name})" if self.title else self.file_name
 
 
 class KnowledgeChunk(TimeStampedModel):
@@ -77,6 +87,9 @@ class KnowledgeChunk(TimeStampedModel):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="chunks")
     product = models.ForeignKey(
         Product, on_delete=models.CASCADE, null=True, blank=True, related_name="chunks"
+    )
+    document = models.ForeignKey(
+        ProductDocument, on_delete=models.CASCADE, null=True, blank=True, related_name="chunks"
     )
     chunk_index = models.PositiveIntegerField()
     content = models.TextField()
