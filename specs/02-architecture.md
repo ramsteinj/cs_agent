@@ -18,7 +18,7 @@
             │ Django ORM
             v
  ┌──────────────────────┐
- │ PostgreSQL 16        │
+ │ PostgreSQL 18        │
  │  + pgvector 확장      │
  └──────────────────────┘
 ```
@@ -48,7 +48,7 @@
 | | cryptography | Fernet (API Key 암호화) |
 | | django-environ | 환경 변수 로딩 |
 | | pytest, pytest-django | 테스트 |
-| Database | PostgreSQL | 16, Docker 이미지 `pgvector/pgvector:pg16` |
+| Database | PostgreSQL | 18 (로컬 설치, 포트 5432) + `postgresql-18-pgvector` |
 
 ## 3. 디렉터리 구조
 

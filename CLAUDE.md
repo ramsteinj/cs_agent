@@ -23,7 +23,7 @@ RAG 기반 Customer Support Chatbot (`cs_agent`). 이 파일은 Claude Code가 �
 
 - Frontend: Vue.js 3 (Composition API, `<script setup>`), Vite, Bootstrap 5.0, HTML5/CSS3, SPA
 - Backend: Python 3.12, Django 5.x, Django ORM, Django REST Framework
-- Database: PostgreSQL 16 + pgvector (`pgvector` Python 패키지의 `VectorField`)
+- Database: PostgreSQL 18 (로컬 설치, 포트 5432) + pgvector (`pgvector` Python 패키지의 `VectorField`)
 - LLM: Anthropic Claude API (공식 `anthropic` Python SDK). API Key는 관리자 화면에서 입력 → DB에 암호화 저장
 - Embedding: 로컬 `sentence-transformers` 모델 (Claude API는 임베딩을 제공하지 않음) — 상세는 specs/05
 
@@ -33,7 +33,6 @@ RAG 기반 Customer Support Chatbot (`cs_agent`). 이 파일은 Claude Code가 �
 cs_agent/
 ├── CLAUDE.md
 ├── README.md
-├── docker-compose.yml        # PostgreSQL + pgvector
 ├── specs/                    # 요구 사항 문서
 ├── backend/                  # Django 프로젝트
 │   ├── manage.py
@@ -51,13 +50,12 @@ cs_agent/
 ## 개발 명령어
 
 ```bash
-# DB (호스트 5432 사용 중이면 루트 .env에 POSTGRES_PORT=5433)
-docker compose up -d db
+# DB: 로컬 PostgreSQL 18 (5432). 최초 설정은 specs/08-dev-and-testing.md "데이터베이스" 참조
 
 # Backend
 cd backend
-python3.12 -m venv .venv && source .venv/bin/activate   # 또는 uv venv --python 3.12 .venv
-pip install -r requirements.txt                           # 또는 uv pip install -r requirements.txt
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 python manage.py migrate          # (Phase 2부터) post_migrate에서 기본 관리자 자동 생성
 python manage.py runserver 8000
 pytest && ruff check . && ruff format --check .

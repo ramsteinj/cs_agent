@@ -28,7 +28,7 @@ Vue.js 3 SPA (Vite, Bootstrap 5.0)
 Django + Django REST Framework ── Claude API (anthropic SDK)
         │  Django ORM               └ sentence-transformers (로컬 임베딩)
         v
-PostgreSQL 16 + pgvector
+PostgreSQL 18 + pgvector
 ```
 
 ## 진행 상황
@@ -45,27 +45,29 @@ PostgreSQL 16 + pgvector
 
 ## 실행 방법
 
-요구 사항: Docker, Python 3.12, Node.js 20+
+요구 사항: PostgreSQL 18(로컬, 포트 5432), Python 3.12(`python3.12-venv`), Node.js 20+
 
-### 1. 데이터베이스 (PostgreSQL 16 + pgvector)
-
-```bash
-docker compose up -d db
-```
-
-호스트의 5432 포트가 이미 사용 중이면 루트에 `.env`를 만들어 다른 포트를 지정합니다. 이 경우 `backend/.env`의 `DATABASE_URL` 포트도 같게 맞춥니다.
+### 1. 데이터베이스 (로컬 PostgreSQL 18 + pgvector, 최초 1회)
 
 ```bash
-echo "POSTGRES_PORT=5433" > .env
+# 1) pgvector 설치 (PostgreSQL 18용)
+sudo apt install -y postgresql-18-pgvector
+# 2) template1에 vector 확장 생성 → 이후 만드는 DB(cs_agent, pytest의 test_cs_agent)에 자동 포함
+sudo -u postgres psql -d template1 -c "CREATE EXTENSION IF NOT EXISTS vector;"
+# 3) 앱 계정(CREATEDB: pytest가 테스트 DB를 만들 수 있도록)과 DB 생성
+sudo -u postgres psql -c "CREATE ROLE cs_agent LOGIN PASSWORD 'cs_agent' CREATEDB;"
+sudo -u postgres psql -c "CREATE DATABASE cs_agent OWNER cs_agent;"
+# 확인
+psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 ```
 
 ### 2. 백엔드 (Django, http://localhost:8000)
 
 ```bash
 cd backend
-python3.12 -m venv .venv            # python3.12-venv가 없으면: uv venv --python 3.12 .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt     # uv 사용 시: uv pip install -r requirements.txt
+pip install -r requirements.txt
 cp .env.example .env                # DJANGO_SECRET_KEY, DATABASE_URL 설정
 python manage.py migrate
 python manage.py runserver 8000
@@ -92,7 +94,6 @@ cd frontend && npm run test && npm run lint && npm run build
 
 ```text
 cs_agent/
-├── docker-compose.yml   # PostgreSQL 16 + pgvector
 ├── specs/               # 요구 사항 문서
 ├── backend/             # Django + DRF
 │   ├── config/          # settings, urls

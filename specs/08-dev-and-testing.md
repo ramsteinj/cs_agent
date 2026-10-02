@@ -2,22 +2,19 @@
 
 ## 1. 로컬 개발 환경
 
-### docker-compose.yml (DB만 컨테이너)
-```yaml
-services:
-  db:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_DB: cs_agent
-      POSTGRES_USER: cs_agent
-      POSTGRES_PASSWORD: cs_agent
-    ports: ["${POSTGRES_PORT:-5432}:5432"]   # 호스트 5432가 사용 중이면 루트 .env에 POSTGRES_PORT 지정
-    volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cs_agent"]
-      interval: 5s
-volumes:
-  pgdata:
+### 데이터베이스 (로컬 PostgreSQL 18 + pgvector)
+로컬에 설치된 PostgreSQL 18 클러스터(포트 5432)를 사용한다 (Docker 미사용).
+
+```bash
+# 1) pgvector 설치 (PostgreSQL 18용)
+sudo apt install -y postgresql-18-pgvector
+# 2) template1에 vector 확장 생성 → 이후 만드는 DB(cs_agent, pytest의 test_cs_agent)에 자동 포함
+sudo -u postgres psql -d template1 -c "CREATE EXTENSION IF NOT EXISTS vector;"
+# 3) 앱 계정(CREATEDB: pytest가 테스트 DB를 만들 수 있도록)과 DB 생성
+sudo -u postgres psql -c "CREATE ROLE cs_agent LOGIN PASSWORD 'cs_agent' CREATEDB;"
+sudo -u postgres psql -c "CREATE DATABASE cs_agent OWNER cs_agent;"
+# 확인
+psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 ```
 
 ### 환경 변수 (`backend/.env`, 템플릿은 `backend/.env.example` 로 커밋)
@@ -26,7 +23,7 @@ volumes:
 | `DJANGO_SECRET_KEY` | (랜덤) | 필수 |
 | `DJANGO_DEBUG` | `True` | |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | |
-| `DATABASE_URL` | `postgres://cs_agent:cs_agent@localhost:5432/cs_agent` | 포트는 `POSTGRES_PORT`와 일치 |
+| `DATABASE_URL` | `postgres://cs_agent:cs_agent@localhost:5432/cs_agent` | 로컬 PostgreSQL 18 |
 | `FIELD_ENCRYPTION_KEY` | (Fernet 키) | 필수, API Key 암호화 |
 | `EMBEDDING_BACKEND` | `sentence_transformers` / `fake` | 테스트는 `fake` |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | |
@@ -37,8 +34,8 @@ volumes:
 > Anthropic API Key는 환경 변수가 아니라 **관리자 화면에서 입력 → DB 저장**이 요구 사항이다. `ANTHROPIC_API_KEY` 환경 변수는 사용하지 않는다.
 
 ### 실행 순서
-1. `docker compose up -d db`
-2. `cd backend && pip install -r requirements.txt && cp .env.example .env` (키 생성 후 기입)
+1. 로컬 PostgreSQL에 pgvector 설치 및 DB 생성 (위 "데이터베이스" 참조, 최초 1회)
+2. `cd backend && python3.12 -m venv .venv && pip install -r requirements.txt && cp .env.example .env` (키 생성 후 기입)
 3. `python manage.py migrate` → pgvector 확장 생성 + 기본 관리자 생성
 4. `python manage.py runserver 8000`
 5. `cd frontend && npm install && npm run dev` → http://localhost:5173
@@ -50,7 +47,7 @@ volumes:
 ## 2. 테스트 전략
 
 ### Backend (pytest + pytest-django)
-- 테스트 DB도 PostgreSQL(pgvector) 사용 — SQLite 금지(벡터 필드 때문).
+- 테스트 DB도 로컬 PostgreSQL(pgvector) 사용 (pytest-django가 `test_cs_agent` 생성) — SQLite 금지(벡터 필드 때문).
 - `EMBEDDING_BACKEND=fake` : 텍스트 해시 기반 결정적 벡터 (같은 텍스트 → 같은 벡터).
 - Claude 호출은 `chat/llm.py` 를 mock 하여 네트워크 없이 테스트. 실제 API 호출 테스트는 `@pytest.mark.live` 로 분리, 기본 실행에서 제외.
 

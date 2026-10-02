@@ -44,7 +44,7 @@
 
 | Phase | 내용 | 완료 조건 |
 |---|---|---|
-| 1. 기반 구성 | docker-compose(pgvector), Django 프로젝트 + 앱 5개 골격, **`accounts.User` 모델과 `AUTH_USER_MODEL`(첫 migrate 전)**, `common` 공통 모듈, Vue+Vite 프로젝트, `/api/health` | 프론트에서 health 호출 성공, 첫 마이그레이션이 `accounts.User` 기준 |
+| 1. 기반 구성 | 로컬 PostgreSQL 18 + pgvector 설정, Django 프로젝트 + 앱 5개 골격, **`accounts.User` 모델과 `AUTH_USER_MODEL`(첫 migrate 전)**, `common` 공통 모듈, Vue+Vite 프로젝트, `/api/health` | 프론트에서 health 호출 성공, 첫 마이그레이션이 `accounts.User` 기준 |
 | 2. 계정 | 기본 관리자 생성, 로그인/로그아웃/me/비밀번호 변경 API, 상단 우측 로그인 UI, SettingsView(비밀번호 카드) | specs/01 F-A1~A3 인수 조건 통과 |
 | 3. 시스템 설정 | `SystemSetting`, API Key 암호화 저장/검증/마스킹, `GET /api/chat/status`, 채팅 비활성 UI | F-A6~A7 통과, F-U2 중 status/UI 부분 통과 |
 | 4. 지식 관리 | Company/Product CRUD API + 관리자 화면, 청킹·임베딩·pgvector 저장, 검색, 재색인(F-A8), `load_sample_knowledge` | F-A4~A5, F-A8 통과 |
