@@ -95,9 +95,9 @@ onMounted(load)
         <thead>
           <tr>
             <th scope="col">회사명</th>
-            <th scope="col">연락처</th>
+            <th scope="col" class="d-none d-md-table-cell">연락처</th>
             <th scope="col" class="text-end">제품</th>
-            <th scope="col" class="text-end">청크</th>
+            <th scope="col" class="text-end d-none d-md-table-cell">청크</th>
             <th scope="col" class="text-end">작업</th>
           </tr>
         </thead>
@@ -112,9 +112,11 @@ onMounted(load)
           </tr>
           <tr v-for="company in companies" v-else :key="company.id" data-test="company-row">
             <td>{{ company.name }}</td>
-            <td class="small text-muted">{{ company.phone || company.email || '-' }}</td>
+            <td class="small text-muted d-none d-md-table-cell">
+              {{ company.phone || company.email || '-' }}
+            </td>
             <td class="text-end">{{ company.product_count }}</td>
-            <td class="text-end">{{ company.chunk_count }}</td>
+            <td class="text-end d-none d-md-table-cell">{{ company.chunk_count }}</td>
             <td class="text-end text-nowrap">
               <RouterLink
                 :to="`/admin/companies/${company.id}/edit`"

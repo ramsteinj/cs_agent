@@ -149,11 +149,11 @@ onMounted(() => {
         <thead>
           <tr>
             <th scope="col">제품명</th>
-            <th scope="col">회사</th>
-            <th scope="col">카테고리</th>
-            <th scope="col">가격</th>
+            <th scope="col" class="d-none d-md-table-cell">회사</th>
+            <th scope="col" class="d-none d-md-table-cell">카테고리</th>
+            <th scope="col" class="d-none d-md-table-cell">가격</th>
             <th scope="col">상태</th>
-            <th scope="col" class="text-end">청크</th>
+            <th scope="col" class="text-end d-none d-md-table-cell">청크</th>
             <th scope="col" class="text-end">작업</th>
           </tr>
         </thead>
@@ -168,15 +168,15 @@ onMounted(() => {
           </tr>
           <tr v-for="product in products" v-else :key="product.id" data-test="product-row">
             <td>{{ product.name }}</td>
-            <td class="small">{{ product.company_name }}</td>
-            <td class="small">{{ product.category || '-' }}</td>
-            <td class="small">{{ product.price || '-' }}</td>
+            <td class="small d-none d-md-table-cell">{{ product.company_name }}</td>
+            <td class="small d-none d-md-table-cell">{{ product.category || '-' }}</td>
+            <td class="small d-none d-md-table-cell">{{ product.price || '-' }}</td>
             <td>
               <span class="badge" :class="product.is_active ? 'bg-success' : 'bg-secondary'">
                 {{ product.is_active ? '활성' : '비활성' }}
               </span>
             </td>
-            <td class="text-end">{{ product.chunk_count }}</td>
+            <td class="text-end d-none d-md-table-cell">{{ product.chunk_count }}</td>
             <td class="text-end text-nowrap">
               <RouterLink
                 :to="`/admin/products/${product.id}/edit`"

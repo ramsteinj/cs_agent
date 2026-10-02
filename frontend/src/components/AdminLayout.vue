@@ -23,13 +23,14 @@ const isActive = (menu) => route.path.startsWith(menu.to)
       <RouterLink to="/admin/settings" class="alert-link">비밀번호를 변경</RouterLink>하세요.
     </div>
     <div class="row g-3">
+      <!-- Top tabs on mobile, left menu on desktop (specs/06 §2) -->
       <nav class="col-md-3 col-lg-2" aria-label="관리자 메뉴">
-        <div class="list-group">
+        <div class="nav nav-pills flex-row flex-md-column gap-1">
           <RouterLink
             v-for="menu in menus"
             :key="menu.to"
             :to="menu.to"
-            class="list-group-item list-group-item-action"
+            class="nav-link"
             :class="{ active: isActive(menu) }"
             :aria-current="isActive(menu) ? 'page' : undefined"
           >

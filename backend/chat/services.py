@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
+from rest_framework.throttling import BaseThrottle
 
 from knowledge.models import KnowledgeChunk
 from knowledge.retrieval import search
@@ -26,8 +27,8 @@ def hash_ip(ip):
 
 
 def client_ip(request):
-    # REMOTE_ADDR only: X-Forwarded-For is client-controlled unless a trusted proxy sets it.
-    return request.META.get("REMOTE_ADDR", "")
+    """Same rule as the DRF throttles: X-Forwarded-For only via NUM_PROXIES trusted hops."""
+    return BaseThrottle().get_ident(request)
 
 
 def create_session(ip):

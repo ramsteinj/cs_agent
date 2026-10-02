@@ -100,6 +100,10 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "common.exceptions.api_exception_handler",
     "DEFAULT_THROTTLE_RATES": {"login": "10/min"},
+    # Number of trusted reverse proxies in front of Django. 0 = ignore X-Forwarded-For
+    # (client-controlled) and use REMOTE_ADDR. Behind one Nginx, set DJANGO_NUM_PROXIES=1.
+    # DRF's default (None) trusts X-Forwarded-For and lets clients bypass IP rate limits.
+    "NUM_PROXIES": env.int("DJANGO_NUM_PROXIES", default=0),
 }
 
 # Fernet key used to encrypt the Anthropic API Key in the DB (specs/07-security.md §3).
@@ -130,11 +134,32 @@ LOGIN_LOCK_MINUTES = 5
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin1234!"
 
+# Production hardening (specs/07-security.md §5). Assumes TLS terminates at a reverse
+# proxy (Nginx) that sets X-Forwarded-Proto.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=True)
+    SECURE_HSTS_SECONDS = env.int("DJANGO_SECURE_HSTS_SECONDS", default=31536000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool(
+        "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False
+    )
+    SECURE_HSTS_PRELOAD = False
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_REFERRER_POLICY = "same-origin"
+    X_FRAME_OPTIONS = "DENY"
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "formatters": {"audit": {"format": "%(asctime)s AUDIT %(message)s"}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+        "audit_console": {"class": "logging.StreamHandler", "formatter": "audit"},
+    },
     "loggers": {
+        # Admin actions (specs/07-security.md §6). Never contains secrets.
+        "audit": {"handlers": ["audit_console"], "level": "INFO", "propagate": True},
         "accounts": {"handlers": ["console"], "level": "INFO"},
         "settings_app": {"handlers": ["console"], "level": "INFO"},
         "knowledge": {"handlers": ["console"], "level": "INFO"},

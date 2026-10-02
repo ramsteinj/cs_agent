@@ -41,7 +41,7 @@ PostgreSQL 18 + pgvector
 | 3 | 시스템 설정 (API Key 암호화 저장, 챗봇 설정, 채팅 활성 상태) | ✅ 완료 |
 | 4 | 지식 관리 (회사/제품 CRUD, 임베딩·pgvector 색인, 검색, 재색인) | ✅ 완료 |
 | 5 | 챗봇 (RAG + Claude 스트리밍, 채팅 UI) | ✅ 완료 |
-| 6 | 마무리 | ⏳ 예정 |
+| 6 | 마무리 (보안 설정, 감사 로그, 세션 정리, 모바일·접근성 점검) | ✅ 완료 |
 
 ## 실행 방법
 
@@ -122,6 +122,31 @@ cd backend && pytest && ruff check . && ruff format --check .
 cd frontend && npm run test && npm run lint && npm run build
 ```
 
+테스트는 Anthropic API를 호출하지 않으며(LLM은 mock), 임베딩은 결정적 가짜 백엔드(`EMBEDDING_BACKEND=fake`)를 씁니다.
+
+## 운영 배포 참고
+
+`DJANGO_DEBUG=False`이면 HTTPS 리다이렉트, HSTS, Secure 쿠키, `X-Frame-Options: DENY`가 켜집니다. TLS는 리버스 프록시(Nginx)에서 종료하고 `X-Forwarded-Proto`를 넘긴다고 가정합니다.
+
+| 환경 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `DJANGO_DEBUG` | `False` | 운영에서는 반드시 `False` |
+| `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | 서비스 도메인 |
+| `DJANGO_NUM_PROXIES` | `0` | 앞단 신뢰 프록시 수. Nginx 1대 뒤라면 `1`. `0`이면 `X-Forwarded-For`를 무시(위조 방지) |
+| `DJANGO_SECURE_SSL_REDIRECT` | `True` | 프록시가 이미 리다이렉트하면 `False` |
+| `DJANGO_SECURE_HSTS_SECONDS` | `31536000` | HSTS 유지 시간 |
+| `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | `False` | 모든 서브도메인이 HTTPS일 때만 `True` |
+
+- 배포 전 점검: `DJANGO_DEBUG=False python manage.py check --deploy`
+- Nginx에서 `/api/chat/messages`는 SSE이므로 응답 버퍼링을 끕니다(서버가 `X-Accel-Buffering: no`를 보냄). 프론트엔드는 `npm run build`의 `dist/`를 정적 서빙하고, 모든 경로를 `index.html`로 돌려 SPA 라우팅을 지원합니다.
+- **감사 로그**: 관리자 로그인 성공/실패, 로그아웃, 비밀번호 변경, API Key 등록/삭제, 설정 변경, 회사·제품 삭제, 전체 재색인이 `audit` 로거로 `... AUDIT event=... user=...` 형식으로 기록됩니다. 비밀번호와 API Key는 기록하지 않습니다.
+- **대화 보관 정책**: 마지막 활동 후 30일이 지난 대화를 지우려면 주기적으로 실행합니다. 예: `0 3 * * * cd /path/backend && .venv/bin/python manage.py cleanup_chat_sessions` (`--days N`, `--dry-run` 지원)
+
+## 남은 작업
+
+- 실제 Anthropic API Key로 [specs/05](specs/05-rag-pipeline.md) §5 답변 품질 체크리스트 확인
+- 검색 거리 임계값 `RAG_MAX_DISTANCE` 조정: e5 모델은 관련·무관 질문 모두 코사인 거리 0.13~0.23 범위라 기본값 0.6으로는 무관한 문서가 걸러지지 않음 (답변은 시스템 프롬프트가 근거 없는 내용을 막지만, 출처 표시에 무관한 항목이 섞일 수 있음)
+
 ## 프로젝트 구조
 
 ```text
@@ -129,13 +154,13 @@ cs_agent/
 ├── specs/               # 요구 사항 문서
 ├── backend/             # Django + DRF
 │   ├── config/          # settings, urls
-│   ├── common/          # 공통 에러 형식, 권한(IsAdminRole), 페이지네이션, health API
+│   ├── common/          # 공통 에러 형식(404/500 포함), 권한(IsAdminRole), 페이지네이션, 감사 로그, health API
 │   ├── accounts/        # User(AbstractUser + role), 로그인/로그아웃/비밀번호 변경, 기본 관리자 생성
 │   ├── knowledge/       # 회사·제품 CRUD, 청킹·임베딩·pgvector 색인, 벡터 검색
 │   ├── chat/            # 챗봇 상태·세션·SSE 메시지 API, RAG 오케스트레이션, Claude 호출(llm.py)
 │   └── settings_app/    # SystemSetting: 암호화된 API Key, 모델·챗봇 설정
 └── frontend/            # Vue 3 + Vite + Bootstrap 5.0 SPA
-    └── src/             # api/, router/, views/, assets/
+    └── src/             # api/, stores/, router/, views/, components/, composables/, assets/
 ```
 
 ## 문서

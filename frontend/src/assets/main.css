@@ -16,3 +16,9 @@ body {
 .app-main {
   min-height: 0;
 }
+
+/* Korean: break tables between words, not inside them */
+.table td,
+.table th {
+  word-break: keep-all;
+}

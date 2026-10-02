@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 
+from common.audit import audit
 from common.exceptions import ApiError
 
 logger = logging.getLogger(__name__)
@@ -80,15 +81,19 @@ def login_admin(username, password):
             user.save(update_fields=["failed_login_count", "locked_until"])
 
     if error:
+        reason = getattr(error, "error_code", "INVALID_CREDENTIALS")
+        audit("login_failed", username, reason=reason)
         raise error
 
     update_last_login(None, user)
+    audit("login_success", user)
     token, _ = Token.objects.get_or_create(user=user)
     return user, token.key
 
 
 def logout(user):
     Token.objects.filter(user=user).delete()
+    audit("logout", user)
 
 
 def change_password(user, new_password):
@@ -99,4 +104,5 @@ def change_password(user, new_password):
         user.save(update_fields=["password", "must_change_password"])
         Token.objects.filter(user=user).delete()
         token = Token.objects.create(user=user)
+    audit("password_changed", user)
     return token.key

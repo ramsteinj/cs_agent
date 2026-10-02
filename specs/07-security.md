@@ -10,6 +10,7 @@
 - 같은 username 연속 5회 실패 → `locked_until = now + 5분`, 이 동안 423 `ACCOUNT_LOCKED`. 성공 시 카운터 리셋.
 - 응답 메시지는 존재하지 않는 계정/틀린 비밀번호를 구분하지 않는다.
 - DRF throttle: `auth/login` 에 IP당 `10/min`.
+- 클라이언트 IP: DRF `NUM_PROXIES`(환경 변수 `DJANGO_NUM_PROXIES`, 기본 0)만큼의 신뢰 프록시 홉에서만 `X-Forwarded-For`를 사용한다. 기본값(DRF의 `None`)은 클라이언트가 보낸 `X-Forwarded-For`를 그대로 믿어 IP 기반 제한을 우회할 수 있으므로 쓰지 않는다. 채팅 rate limit도 같은 규칙을 쓴다.
 
 ## 3. Claude API Key 보호
 - 저장: `cryptography.fernet.Fernet` 으로 암호화하여 `SystemSetting.anthropic_api_key_encrypted` 에 저장.
@@ -28,8 +29,10 @@
 ## 5. 웹 보안
 - XSS: Vue 템플릿 기본 이스케이프 사용, `v-html` 금지(마크다운은 DOMPurify sanitize 후에만).
 - CORS: 개발은 Vite 프록시로 동일 출처. 운영에서 다른 출처가 필요하면 `django-cors-headers` 로 허용 출처만 명시.
-- `DEBUG=False` 운영 시 `ALLOWED_HOSTS`, `SECURE_*`, `SESSION_COOKIE_SECURE` 설정.
+- `DEBUG=False` 운영 시 `ALLOWED_HOSTS`, `SECURE_*`, `SESSION_COOKIE_SECURE` 설정. (구현: `SECURE_PROXY_SSL_HEADER`, SSL 리다이렉트, HSTS 1년, Secure 쿠키, `X_FRAME_OPTIONS=DENY`; `manage.py check --deploy`의 남는 경고는 도메인 정책에 따른 HSTS 서브도메인/preload 2건)
+- `/api/` 경로의 404/500도 공통 에러 형식(JSON)으로 응답하고, 500에는 스택 트레이스를 포함하지 않는다.
 - `SECRET_KEY`, DB 비밀번호, `FIELD_ENCRYPTION_KEY` 는 `.env` 에만, `.env` 는 `.gitignore` 에 포함. `.env.example` 만 커밋.
 
 ## 6. 감사 로그 (선택, v1 권장)
 - 관리자 로그인 성공/실패, API Key 변경/삭제, 회사·제품 삭제를 `logging` 으로 INFO 기록 (username, 시각, 대상 ID; 비밀 값 제외).
+- 구현: `common.audit.audit()` → `audit` 로거, 한 줄 `event=<이름> user=<username> key=value ...`. 값은 repr로 감싸 줄바꿈 등 로그 위조를 막는다. 추가로 로그아웃, 비밀번호 변경, 설정 변경, 전체 재색인도 기록한다.

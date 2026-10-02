@@ -1,5 +1,7 @@
 <script setup>
-defineProps({
+import { nextTick, ref, watch } from 'vue'
+
+const props = defineProps({
   show: { type: Boolean, default: false },
   title: { type: String, default: '확인' },
   message: { type: String, required: true },
@@ -8,6 +10,18 @@ defineProps({
 })
 
 const emit = defineEmits(['confirm', 'cancel'])
+
+// Move keyboard focus into the dialog so Enter/Esc work right away (specs/06 §7).
+const cancelButton = ref(null)
+watch(
+  () => props.show,
+  async (show) => {
+    if (!show) return
+    await nextTick()
+    cancelButton.value?.focus()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -33,7 +47,12 @@ const emit = defineEmits(['confirm', 'cancel'])
           </div>
           <div class="modal-body">{{ message }}</div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-outline-secondary" @click="emit('cancel')">
+            <button
+              ref="cancelButton"
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="emit('cancel')"
+            >
               취소
             </button>
             <button

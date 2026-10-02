@@ -32,6 +32,7 @@ DRF `EXCEPTION_HANDLER`를 커스텀(`common.exceptions.api_exception_handler`)�
 | 502 | `LLM_ERROR` | Claude API 오류 |
 | 503 | `CHATBOT_DISABLED` | API Key 미등록 |
 | 503 | `EMBEDDING_ERROR` | 임베딩 생성 실패 (저장 내용은 롤백됨) |
+| 500 | `SERVER_ERROR` | 처리되지 않은 서버 오류 (상세 내용 미노출) |
 
 ---
 

@@ -9,3 +9,6 @@ urlpatterns = [
     path("api/admin/", include("knowledge.urls")),
     path("api/chat/", include("chat.urls")),
 ]
+
+handler404 = "common.views.not_found"
+handler500 = "common.views.server_error"

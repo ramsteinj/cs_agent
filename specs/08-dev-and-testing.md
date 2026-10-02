@@ -25,6 +25,8 @@ psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | |
 | `DATABASE_URL` | `postgres://cs_agent:cs_agent@localhost:5432/cs_agent` | 로컬 PostgreSQL 18 |
 | `FIELD_ENCRYPTION_KEY` | (Fernet 키) | 필수, API Key 암호화 |
+| `DJANGO_NUM_PROXIES` | `0` | 신뢰하는 리버스 프록시 수 (Nginx 1대 뒤면 `1`). `0`이면 `X-Forwarded-For` 무시 |
+| `DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_SECURE_HSTS_SECONDS` / `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | `True` / `31536000` / `False` | `DJANGO_DEBUG=False`일 때만 적용 |
 | `EMBEDDING_BACKEND` | `sentence_transformers` / `fake` | 테스트는 `fake` |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | |
 | `EMBEDDING_DIM` | `384` | 마이그레이션 차원과 일치해야 함 |

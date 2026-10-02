@@ -4,6 +4,8 @@ from rest_framework import filters, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
+from common.audit import audit
+
 from . import services
 from .indexing import reindex_all
 from .models import Company, KnowledgeChunk, Product
@@ -27,6 +29,10 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         services.save_company(serializer)
+
+    def perform_destroy(self, instance):
+        audit("company_deleted", self.request.user, id=instance.pk, name=instance.name)
+        instance.delete()
 
 
 def _parse_bool(value):
@@ -60,6 +66,10 @@ class ProductViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         services.save_product(serializer)
 
+    def perform_destroy(self, instance):
+        audit("product_deleted", self.request.user, id=instance.pk, name=instance.name)
+        instance.delete()
+
     @action(detail=False, methods=["get"])
     def categories(self, request):
         categories = (
@@ -73,7 +83,9 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 @api_view(["POST"])
 def reindex(request):
-    return Response({"chunks": reindex_all()})
+    chunks = reindex_all()
+    audit("knowledge_reindexed", request.user, chunks=chunks)
+    return Response({"chunks": chunks})
 
 
 @api_view(["GET"])
