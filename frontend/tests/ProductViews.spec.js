@@ -348,3 +348,46 @@ describe('ProductFormView document titles', () => {
     expect(save().attributes('disabled')).toBeDefined()
   })
 })
+
+describe('ProductListView same-name products', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    document.body.innerHTML = ''
+    knowledgeApi.listAllCompanies.mockResolvedValue([])
+    knowledgeApi.listCategories.mockResolvedValue([])
+    knowledgeApi.listProducts.mockResolvedValue({
+      count: 2,
+      results: [
+        {
+          id: 5,
+          name: 'SC95A',
+          company_name: 'A',
+          category: 'Quick Install Guide',
+          price: '',
+          is_active: true,
+          document_count: 1,
+          chunk_count: 4,
+        },
+        {
+          id: 6,
+          name: 'SC95A',
+          company_name: 'A',
+          category: 'E-Manual',
+          price: '',
+          is_active: true,
+          document_count: 1,
+          chunk_count: 900,
+        },
+      ],
+    })
+  })
+
+  it('shows the category under the name for mobile', async () => {
+    const { wrapper } = await mountRoute(ProductListView, { path: '/admin/products' })
+
+    expect(wrapper.findAll('[data-test="row-category"]').map((c) => c.text())).toEqual([
+      'Quick Install Guide',
+      'E-Manual',
+    ])
+  })
+})

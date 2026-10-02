@@ -110,7 +110,7 @@ npm run dev                         # /api 요청은 Django(8000)로 프록시
 
 - **관리자 페이지 → 회사 관리 / 제품 관리**에서 정보를 등록·수정·삭제합니다. 저장하면 내용을 청크로 나누고 임베딩을 만들어 pgvector(`KnowledgeChunk`)에 저장합니다.
 - 회사를 삭제하면 소속 제품과 청크도 함께 삭제됩니다. **판매 중**을 끈 제품은 챗봇 답변 근거에서 제외됩니다.
-- **제품 문서 (Text / Word / PDF)**: 제품 등록·수정 화면에서 `.txt`, `.docx`, `.pdf` 파일(파일당 10MB, 여러 개)을 올리면 텍스트를 추출해 제품 정보로 색인합니다. 한 제품에 사용자 매뉴얼, 빠른 설치 가이드 등 여러 문서를 올리고 문서마다 **제목**을 붙일 수 있으며(업로드 후 변경 가능), 챗봇 출처에 "제품명 · 문서 제목"으로 표시됩니다. 제품명은 같은 회사 안에서 고유합니다. 상세 설명 없이 문서만으로도 등록할 수 있습니다. 원본 파일은 저장하지 않고 추출한 텍스트만 DB에 저장합니다. 구형 `.doc`, 암호가 걸린 PDF, 텍스트가 없는 스캔 PDF는 거부됩니다.
+- **제품 문서 (Text / Word / PDF)**: 제품 등록·수정 화면에서 `.txt`, `.docx`, `.pdf` 파일(파일당 10MB, 여러 개)을 올리면 텍스트를 추출해 제품 정보로 색인합니다. 한 제품에 사용자 매뉴얼, 빠른 설치 가이드 등 여러 문서를 올리고 문서마다 **제목**을 붙일 수 있으며(업로드 후 변경 가능), 챗봇 출처에 "제품명 · 문서 제목"으로 표시됩니다. 같은 회사에서 **제품명이 같아도 카테고리가 다르면** 따로 등록할 수 있습니다(이름과 카테고리가 모두 같으면 중복). 문서 1개당 텍스트는 **최대 100만 자**(PDF 2,000쪽)이며, 100만 자 문서는 업로드·색인에 약 45초가 걸립니다. 이후 가격 수정 같은 변경은 바뀐 부분만 다시 임베딩하므로 바로 저장됩니다. 상세 설명 없이 문서만으로도 등록할 수 있습니다. 원본 파일은 저장하지 않고 추출한 텍스트만 DB에 저장합니다. 구형 `.doc`, 암호가 걸린 PDF, 텍스트가 없는 스캔 PDF는 거부됩니다.
 - 임베딩 모델 `intfloat/multilingual-e5-small`(384차원)은 첫 사용 시 Hugging Face에서 자동으로 내려받습니다(약 470MB, `~/.cache/huggingface`).
 - **시스템 설정 → 지식 색인**에서 통계를 보고 전체 재색인을 실행할 수 있습니다.
 - 데모용 가상 데이터(회사 1개, 제품 3개): `python manage.py load_sample_knowledge` (다시 만들려면 `--reset`)
@@ -153,7 +153,7 @@ cd frontend && npm run test && npm run lint && npm run build
 | `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | `False` | 모든 서브도메인이 HTTPS일 때만 `True` |
 
 - 배포 전 점검: `DJANGO_DEBUG=False python manage.py check --deploy`
-- Nginx에서 `/api/chat/messages`는 SSE이므로 응답 버퍼링을 끕니다(서버가 `X-Accel-Buffering: no`를 보냄). 프론트엔드는 `npm run build`의 `dist/`를 정적 서빙하고, 모든 경로를 `index.html`로 돌려 SPA 라우팅을 지원합니다.
+- Nginx에서 `/api/chat/messages`는 SSE이므로 응답 버퍼링을 끕니다(서버가 `X-Accel-Buffering: no`를 보냄). 제품 문서 업로드는 큰 파일에서 1분 가까이 걸릴 수 있으므로 `/api/admin/` 경로는 `client_max_body_size 10m;`, `proxy_read_timeout 300s;` 이상으로 설정합니다. 프론트엔드는 `npm run build`의 `dist/`를 정적 서빙하고, 모든 경로를 `index.html`로 돌려 SPA 라우팅을 지원합니다.
 - **감사 로그**: 관리자 로그인 성공/실패, 로그아웃, 비밀번호 변경, API Key 등록/삭제, 설정 변경, 회사·제품 삭제, 전체 재색인이 `audit` 로거로 `... AUDIT event=... user=...` 형식으로 기록됩니다. 비밀번호와 API Key는 기록하지 않습니다.
 - **LLM 호출 실패 로그**: `LLM call failed (provider=..., model=...): ...` 형식으로 HTTP 상태·오류 종류·요청 ID만 남깁니다(키와 원본 메시지 제외). Claude `status=400 type=invalid_request_error request_id=req_...`, ChatGPT `status=429 type=insufficient_quota code=insufficient_quota request_id=...`, Gemini `status=400 code=INVALID_ARGUMENT`. 요청 ID로 공급자 콘솔 로그를 찾을 수 있습니다.
 - **대화 보관 정책**: 마지막 활동 후 30일이 지난 대화를 지우려면 주기적으로 실행합니다. 예: `0 3 * * * cd /path/backend && .venv/bin/python manage.py cleanup_chat_sessions` (`--days N`, `--dry-run` 지원)

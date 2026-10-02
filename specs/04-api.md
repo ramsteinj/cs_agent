@@ -26,11 +26,11 @@ DRF `EXCEPTION_HANDLER`를 커스텀(`common.exceptions.api_exception_handler`)�
 | 400 | `API_KEY_REQUIRED` | 키가 없는 공급자의 모델 목록 요청 |
 | 400 | `UNSUPPORTED_FILE` | 지원하지 않는 파일 (txt/docx/pdf 외, 구형 .doc, 암호화 PDF) |
 | 400 | `DOCUMENT_PARSE_ERROR` | 파일에서 텍스트를 추출할 수 없음 (손상, 스캔 PDF 등) |
-| 413 | `FILE_TOO_LARGE` | 파일 10MB 초과 또는 추출 텍스트 200,000자 초과 |
+| 413 | `FILE_TOO_LARGE` | 파일 10MB 초과, 추출 텍스트 1,000,000자 초과, PDF 2,000쪽 초과 |
 | 401 | `NOT_AUTHENTICATED` / `INVALID_CREDENTIALS` | 미인증 / 로그인 실패 |
 | 403 | `PERMISSION_DENIED` | 관리자 아님 |
 | 404 | `NOT_FOUND` | |
-| 409 | `CONFLICT` | 중복(unique), 재색인 진행 중 |
+| 409 | `CONFLICT` | 중복(unique: 회사명, 같은 회사의 제품명+카테고리), 재색인 진행 중 |
 | 423 | `ACCOUNT_LOCKED` | 로그인 차단 상태 |
 | 429 | `RATE_LIMITED` | 요청 제한 |
 | 502 | `LLM_ERROR` | LLM API 오류 (Claude / ChatGPT / Gemini) |

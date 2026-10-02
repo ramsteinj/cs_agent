@@ -12,7 +12,7 @@ from settings_app.models import SystemSetting
 
 from . import services
 from .documents import extract_text
-from .indexing import reindex_all, reindex_product
+from .indexing import index_document, reindex_all
 from .models import Company, KnowledgeChunk, Product, ProductDocument
 from .serializers import (
     CompanySerializer,
@@ -118,7 +118,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                 file_size=file_size,
                 text=text,
             )
-            reindex_product(product)
+            index_document(document)
         audit(
             "product_document_uploaded",
             request.user,
@@ -139,7 +139,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 document.title = serializer.validated_data["title"].strip()
                 document.save(update_fields=["title", "updated_at"])
-                reindex_product(product)
+                index_document(document)
             audit(
                 "product_document_renamed",
                 request.user,
@@ -149,9 +149,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
             return Response(ProductDocumentSerializer(document).data)
 
-        with transaction.atomic():
-            document.delete()
-            reindex_product(product)
+        document.delete()  # its chunks go with it (KnowledgeChunk.document CASCADE)
         audit(
             "product_document_deleted",
             request.user,

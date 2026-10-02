@@ -77,14 +77,33 @@ class TestProductApi:
         assert admin_client.delete(f"{URL}/{product.pk}").status_code == 204
         assert not _chunks(product.pk).exists()
 
-    def test_duplicate_name_within_company_is_conflict(self, admin_client):
+    def test_same_name_and_category_is_conflict(self, admin_client):
         company = make_company()
-        make_product(company, name="오케이드라이브")
+        make_product(company, name="오케이드라이브", category="문서 관리")
 
         response = admin_client.post(URL, _payload(company), format="json")
 
         assert response.status_code == 409
-        assert "name" in response.json()["error"]["details"]
+        assert "카테고리" in response.json()["error"]["details"]["name"][0]
+
+    def test_same_name_with_another_category_is_allowed(self, admin_client):
+        company = make_company()
+        make_product(company, name="SC95A", category="Quick Install Guide")
+
+        response = admin_client.post(
+            URL, _payload(company, name="SC95A", category="E-Manual"), format="json"
+        )
+
+        assert response.status_code == 201
+
+    def test_changing_category_into_a_duplicate_is_rejected(self, admin_client):
+        company = make_company()
+        make_product(company, name="SC95A", category="TV")
+        other = make_product(company, name="SC95A", category="모니터")
+
+        response = admin_client.patch(f"{URL}/{other.pk}", {"category": "TV"}, format="json")
+
+        assert response.status_code == 409
 
     def test_same_name_in_another_company_is_allowed(self, admin_client):
         make_product(make_company(name="A"), name="오케이드라이브")

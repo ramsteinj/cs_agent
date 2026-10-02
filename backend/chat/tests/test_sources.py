@@ -149,3 +149,30 @@ def test_document_chunk_source_shows_the_document_title():
     assert titles([chunk, DRIVE], "오케이드라이브는 3단계로 설치합니다.") == [
         "오케이드라이브 · 빠른 설치 가이드"
     ]
+
+
+def test_same_name_products_show_their_category():
+    tv = SimpleNamespace(
+        source_type="product",
+        source_id=5,
+        product_id=5,
+        document_id=None,
+        product=SimpleNamespace(name="SC95A", category="Quick Install Guide"),
+        company=COMPANY,
+    )
+    manual = SimpleNamespace(
+        source_type="product",
+        source_id=6,
+        product_id=6,
+        document_id=9,
+        document=SimpleNamespace(display_name="Smart TV E-Manual"),
+        product=SimpleNamespace(name="SC95A", category="E-Manual"),
+        company=COMPANY,
+    )
+
+    sources = select_sources([manual, tv], "SC95A의 설치 방법입니다.", 3, frozenset({5, 6}))
+
+    assert [s["title"] for s in sources] == [
+        "SC95A (E-Manual) · Smart TV E-Manual",
+        "SC95A (Quick Install Guide)",
+    ]

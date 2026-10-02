@@ -65,9 +65,11 @@ def _is_used(chunk, answer):
     )
 
 
-def _source(chunk):
+def _source(chunk, ambiguous_product_ids):
     if chunk.product_id:
         title = chunk.product.name
+        if chunk.product_id in ambiguous_product_ids and chunk.product.category:
+            title = f"{title} ({chunk.product.category})"  # same name, other category exists
         if getattr(chunk, "document_id", None):
             # The product's most relevant chunk came from one of its documents.
             title = f"{title} · {chunk.document.display_name}"
@@ -76,8 +78,12 @@ def _source(chunk):
     return {"type": chunk.source_type, "id": chunk.source_id, "title": title}
 
 
-def select_sources(chunks, answer_text, limit):
-    """Sources used by the answer, in retrieval (relevance) order, at most `limit`."""
+def select_sources(chunks, answer_text, limit, ambiguous_product_ids=frozenset()):
+    """Sources used by the answer, in retrieval (relevance) order, at most `limit`.
+
+    ambiguous_product_ids: products sharing their name with another product of the same
+    company; their titles get the category appended.
+    """
     if limit <= 0 or not chunks:
         return []
     first_chunk_per_source = {}
@@ -87,4 +93,4 @@ def select_sources(chunks, answer_text, limit):
 
     answer = _Answer(answer_text)
     used = candidates[:1] + [chunk for chunk in candidates[1:] if _is_used(chunk, answer)]
-    return [_source(chunk) for chunk in used[:limit]]
+    return [_source(chunk, ambiguous_product_ids) for chunk in used[:limit]]

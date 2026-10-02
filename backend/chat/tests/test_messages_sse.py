@@ -7,6 +7,7 @@ import pytest
 import llm
 from chat import services
 from chat.models import ChatMessage, ChatSession
+from knowledge.models import KnowledgeChunk
 from knowledge.tests.factories import make_company, make_product
 from settings_app.models import LLMProviderConfig, SystemSetting
 
@@ -366,3 +367,17 @@ def test_configured_temperature_is_passed_to_the_provider(client, enabled, sessi
         _events(_send(client, session))
 
     assert calls[0]["temperature"] == 0.2
+
+
+@pytest.mark.django_db
+def test_ambiguous_product_names_are_detected(enabled):
+    company = make_company()
+    tv = make_product(company, name="SC95A", category="TV")
+    make_product(company, name="SC95A", category="모니터")
+    unique = make_product(company, name="오케이드라이브")
+    chunks = list(KnowledgeChunk.objects.filter(product__isnull=False).select_related("product"))
+
+    ids = services.ambiguous_product_ids(chunks)
+
+    assert tv.pk in ids
+    assert unique.pk not in ids

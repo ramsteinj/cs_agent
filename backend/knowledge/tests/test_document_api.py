@@ -43,14 +43,15 @@ class TestDocumentApi:
         assert body["char_count"] == len("대용량 요금제는 월 9,900원이며 2TB를 제공합니다.")
         assert body["preview"].startswith("대용량 요금제")
         assert "text" not in body
-        chunks = KnowledgeChunk.objects.filter(product=product).order_by("chunk_index")
-        assert chunks[0].content.startswith("[제품] 오케이드라이브 (오케이테크)")
-        doc_chunk = chunks.last()
+        chunks = KnowledgeChunk.objects.filter(product=product)
+        field_chunk = chunks.get(document__isnull=True)
+        assert field_chunk.content.startswith("[제품] 오케이드라이브 (오케이테크)\n")
+        doc_chunk = chunks.get(document__isnull=False)
         assert doc_chunk.content.startswith(
             "[제품] 오케이드라이브 (오케이테크) / 문서: 요금제.docx"
         )
         assert "월 9,900원" in doc_chunk.content
-        assert [c.chunk_index for c in chunks] == list(range(chunks.count()))
+        assert (field_chunk.chunk_index, doc_chunk.chunk_index) == (0, 0)  # per section
 
     def test_product_document_count_and_list(self, admin_client, product):
         _upload(admin_client, product, "a.txt", "첫 문서".encode())
@@ -205,7 +206,7 @@ class TestDocumentTitles:
         assert response.status_code == 400
         assert "title" in response.json()["error"]["details"]
 
-    def test_product_names_stay_unique_per_company(self, admin_client, product):
+    def test_same_name_and_category_is_still_a_duplicate(self, admin_client, product):
         response = admin_client.post(
             "/api/admin/products",
             {"company": product.company.pk, "name": product.name},

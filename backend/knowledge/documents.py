@@ -15,9 +15,9 @@ from rest_framework import status
 from common.exceptions import ApiError
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
-MAX_TEXT_CHARS = 200_000
+MAX_TEXT_CHARS = 1_000_000  # ~2,300 chunks, ~40s to embed on CPU
 MAX_DOCX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024  # zip-bomb guard
-MAX_PDF_PAGES = 500
+MAX_PDF_PAGES = 2000
 ALLOWED_TYPES = ("txt", "docx", "pdf")
 
 

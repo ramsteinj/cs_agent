@@ -53,7 +53,7 @@ LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호
 | 필드 | 타입 | 제약 |
 |---|---|---|
 | company | FK(Company, on_delete=CASCADE, related_name="products") | 필수 |
-| name | CharField(200) | 필수, (company, name) unique |
+| name | CharField(200) | 필수, (company, name, category) unique — 이름이 같아도 카테고리가 다르면 등록 가능 |
 | category | CharField(100) | 선택, db_index |
 | summary | CharField(500) | 선택 |
 | description | TextField | 선택 (직접 입력 또는 문서 업로드 중 하나 이상 — 프론트에서 검증) |
@@ -73,7 +73,7 @@ LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호
 | file_name | CharField(255) | 원본 파일명 (경로 제거) |
 | file_type | CharField(choices: `txt`, `docx`, `pdf`) | |
 | file_size | PositiveIntegerField | 바이트 |
-| text | TextField | 추출 텍스트 (최대 200,000자) |
+| text | TextField | 추출 텍스트 (최대 1,000,000자) |
 
 - 제한: 파일 10MB 이하, `.doc`(구형 Word)·암호화 PDF·텍스트가 없는 스캔 PDF는 거부.
 - 색인: 제품 청크 생성 시 제품 필드 텍스트 다음에 문서별로 청킹한다 (specs/05 §2.1).
@@ -95,7 +95,7 @@ LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호
 - 인덱스:
   - `HnswIndex(name="chunk_embedding_hnsw", fields=["embedding"], m=16, ef_construction=64, opclasses=["vector_cosine_ops"])`
   - `(source_type, source_id)` 복합 인덱스
-- 제약: `(source_type, source_id, chunk_index)` unique
+- 제약: `(source_type, source_id, document, chunk_index)` unique (NULL document도 같은 값으로 취급). `chunk_index`는 구역(제품 필드 / 각 문서)마다 0부터 매긴다 — 문서를 따로 색인할 수 있게.
 
 ### pgvector 확장 활성화
 `knowledge` 앱의 **첫 마이그레이션** 맨 앞에 `pgvector.django.VectorExtension()` 오퍼레이션을 넣어 `CREATE EXTENSION IF NOT EXISTS vector` 를 실행한다.

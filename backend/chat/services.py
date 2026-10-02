@@ -5,12 +5,12 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework.throttling import BaseThrottle
 
 import llm
-from knowledge.models import KnowledgeChunk
+from knowledge.models import KnowledgeChunk, Product
 from knowledge.retrieval import search
 from settings_app.models import SystemSetting
 
@@ -87,6 +87,26 @@ def search_query(session, question, before_id, with_previous=True):
     return f"{previous}\n{question}" if previous else question
 
 
+def ambiguous_product_ids(chunks):
+    """Products in `chunks` whose name is shared by another product of the same company."""
+    keys = {(c.company_id, c.product.name) for c in chunks if c.product_id}
+    if not keys:
+        return frozenset()
+    query = Q()
+    for company_id, name in keys:
+        query |= Q(company_id=company_id, name=name)
+    shared = {
+        (row["company_id"], row["name"])
+        for row in Product.objects.filter(query)
+        .values("company_id", "name")
+        .annotate(n=Count("id"))
+        .filter(n__gt=1)
+    }
+    return frozenset(
+        c.product_id for c in chunks if c.product_id and (c.company_id, c.product.name) in shared
+    )
+
+
 def sources_from_ids(chunk_ids, answer_text, limit):
     """Rebuild sources for stored messages; chunks re-created by later edits are skipped."""
     chunks = {
@@ -95,7 +115,8 @@ def sources_from_ids(chunk_ids, answer_text, limit):
             "company", "product", "document"
         )
     }
-    return select_sources([chunks[i] for i in chunk_ids if i in chunks], answer_text, limit)
+    found = [chunks[i] for i in chunk_ids if i in chunks]
+    return select_sources(found, answer_text, limit, ambiguous_product_ids(found))
 
 
 # --- Turn --------------------------------------------------------------------
@@ -173,7 +194,11 @@ def answer_stream(session, question):
     assistant.output_tokens = final.output_tokens
     assistant.save()
 
-    sources = [] if final.refused else select_sources(chunks, final.text, setting.max_sources)
+    sources = (
+        []
+        if final.refused
+        else select_sources(chunks, final.text, setting.max_sources, ambiguous_product_ids(chunks))
+    )
     done = {"type": "done", "sources": sources}
     if final.text != "".join(streamed):
         # e.g. refusal after partial output: the client must replace what it showed.

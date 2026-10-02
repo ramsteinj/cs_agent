@@ -81,12 +81,19 @@ class ProductSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         company = attrs.get("company", getattr(self.instance, "company", None))
         name = attrs.get("name", getattr(self.instance, "name", None))
-        duplicates = Product.objects.filter(company=company, name=name)
+        category = attrs.get("category", getattr(self.instance, "category", ""))
+        duplicates = Product.objects.filter(company=company, name=name, category=category)
         if self.instance:
             duplicates = duplicates.exclude(pk=self.instance.pk)
         if duplicates.exists():
             raise serializers.ValidationError(
-                {"name": ["이 회사에 같은 이름의 제품이 이미 있습니다."]}, code="unique"
+                {
+                    "name": [
+                        "이 회사에 이름과 카테고리가 같은 제품이 이미 있습니다. "
+                        "카테고리를 다르게 지정해 주세요."
+                    ]
+                },
+                code="unique",
             )
         return attrs
 

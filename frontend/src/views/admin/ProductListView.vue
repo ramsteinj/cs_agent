@@ -168,7 +168,17 @@ onMounted(() => {
             </td>
           </tr>
           <tr v-for="product in products" v-else :key="product.id" data-test="product-row">
-            <td>{{ product.name }}</td>
+            <td>
+              {{ product.name }}
+              <!-- category is its own column on desktop; same-name products differ by it -->
+              <div
+                v-if="product.category"
+                class="small text-muted d-md-none"
+                data-test="row-category"
+              >
+                {{ product.category }}
+              </div>
+            </td>
             <td class="small d-none d-md-table-cell">{{ product.company_name }}</td>
             <td class="small d-none d-md-table-cell">{{ product.category || '-' }}</td>
             <td class="small d-none d-md-table-cell">{{ product.price || '-' }}</td>

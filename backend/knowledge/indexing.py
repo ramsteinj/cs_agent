@@ -39,12 +39,12 @@ def _make_chunks(source_type, source, company, product, sections, searchable):
     """Chunk every (header, body, document) section, embed them in one batch, number them."""
     max_chars, overlap = _chunk_settings()
     pieces = [
-        (text, document)
+        (text, document, index)  # index restarts per section
         for header, body, document in sections
-        for text in chunk_text(header, body, max_chars=max_chars, overlap=overlap)
+        for index, text in enumerate(chunk_text(header, body, max_chars=max_chars, overlap=overlap))
     ]
     try:
-        vectors = embeddings.embed_passages([text for text, _ in pieces])
+        vectors = embeddings.embed_passages([text for text, _, _ in pieces])
         model_name = embeddings.model_name()
     except embeddings.EmbeddingError:  # ImproperlyConfigured (wrong dimension) propagates
         logger.exception("Embedding failed for %s:%s", source_type, source.pk)
@@ -62,7 +62,7 @@ def _make_chunks(source_type, source, company, product, sections, searchable):
             embedding_model=model_name,
             is_searchable=searchable,
         )
-        for index, ((text, document), vector) in enumerate(zip(pieces, vectors, strict=True))
+        for (text, document, index), vector in zip(pieces, vectors, strict=True)
     ]
 
 
@@ -72,13 +72,21 @@ def _replace(source_type, source_id, chunks):
     return len(chunks)
 
 
-def reindex_product(product):
-    """Product fields first, then each uploaded document (specs/05 §2.1)."""
-    sections = [(*product_document(product), None)]
-    sections += [
-        (document_header(product, document), document.text, document)
-        for document in product.documents.all()
-    ]
+def _product_chunks(product):
+    return KnowledgeChunk.objects.filter(
+        source_type=KnowledgeChunk.SourceType.PRODUCT, source_id=product.pk
+    )
+
+
+def _field_section(product):
+    return (*product_document(product), None)
+
+
+def _document_section(product, document):
+    return (document_header(product, document), document.text, document)
+
+
+def _create(product, sections):
     chunks = _make_chunks(
         KnowledgeChunk.SourceType.PRODUCT,
         product,
@@ -87,7 +95,37 @@ def reindex_product(product):
         sections,
         searchable=product.is_active,
     )
-    return _replace(KnowledgeChunk.SourceType.PRODUCT, product.pk, chunks)
+    KnowledgeChunk.objects.bulk_create(chunks)
+    return len(chunks)
+
+
+def reindex_product(product):
+    """Rebuild every chunk of a product: fields first, then each document (specs/05 §2.1).
+
+    Needed when something in the chunk headers changes (name, company, category).
+    """
+    _product_chunks(product).delete()
+    sections = [_field_section(product)]
+    sections += [_document_section(product, doc) for doc in product.documents.all()]
+    return _create(product, sections)
+
+
+def reindex_product_fields(product):
+    """Re-embed only the product-field chunks (description, price, ...); documents untouched."""
+    _product_chunks(product).filter(document__isnull=True).delete()
+    return _create(product, [_field_section(product)])
+
+
+def index_document(document):
+    """(Re-)embed one document's chunks; the product's other chunks are untouched."""
+    product = document.product
+    _product_chunks(product).filter(document=document).delete()
+    return _create(product, [_document_section(product, document)])
+
+
+def set_product_searchable(product):
+    """Activation change: no re-embedding needed."""
+    return _product_chunks(product).update(is_searchable=product.is_active)
 
 
 def reindex_company(company, include_products=True):

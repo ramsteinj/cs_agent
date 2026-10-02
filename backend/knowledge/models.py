@@ -37,8 +37,10 @@ class Product(TimeStampedModel):
     class Meta:
         ordering = ["name"]
         constraints = [
+            # Same name is allowed when the category differs (e.g. one model sold as TV / monitor).
             models.UniqueConstraint(
-                fields=["company", "name"], name="uniq_product_name_per_company"
+                fields=["company", "name", "category"],
+                name="uniq_product_name_category_per_company",
             )
         ]
 
@@ -110,8 +112,12 @@ class KnowledgeChunk(TimeStampedModel):
             models.Index(fields=["source_type", "source_id"], name="chunk_source_idx"),
         ]
         constraints = [
+            # chunk_index restarts per section (product fields / each document) so a single
+            # document can be re-indexed without renumbering the rest.
             models.UniqueConstraint(
-                fields=["source_type", "source_id", "chunk_index"], name="uniq_chunk_per_source"
+                fields=["source_type", "source_id", "document", "chunk_index"],
+                name="uniq_chunk_per_section",
+                nulls_distinct=False,
             )
         ]
 

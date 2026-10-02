@@ -232,6 +232,7 @@ const textareas = [
             :class="{ 'is-invalid': errors.name }"
           />
           <div class="invalid-feedback">{{ errors.name }}</div>
+          <div class="form-text">같은 이름이어도 카테고리가 다르면 따로 등록할 수 있습니다.</div>
         </div>
         <div class="col-md-6 mb-3">
           <label for="product-category" class="form-label">카테고리</label>
@@ -301,8 +302,9 @@ const textareas = [
       <fieldset class="border rounded p-3 mb-3" data-test="documents">
         <legend class="float-none w-auto px-1 fs-6 mb-0">제품 문서 (Text / Word / PDF)</legend>
         <p class="form-text mt-0">
-          .txt, .docx, .pdf 파일에서 텍스트를 추출해 제품 정보로 사용합니다. (파일당 10MB, 스캔한
-          이미지 PDF·구형 .doc 제외)
+          .txt, .docx, .pdf 파일에서 텍스트를 추출해 제품 정보로 사용합니다. (파일당 10MB, 텍스트
+          100만 자까지, 스캔한 이미지 PDF·구형 .doc 제외) 큰 문서는 저장에 수십 초가 걸릴 수
+          있습니다.
         </p>
 
         <datalist id="document-title-options">

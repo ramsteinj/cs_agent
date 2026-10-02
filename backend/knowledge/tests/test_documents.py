@@ -124,3 +124,17 @@ class TestCommon:
     )
     def test_clean_file_name(self, raw, clean):
         assert clean_file_name(raw) == clean
+
+
+def test_one_million_characters_are_accepted():
+    text = ("가" * 99 + "\n") * 10_000  # exactly 1,000,000 characters
+
+    assert len(_extract("big.txt", text.encode())[3]) == 1_000_000 - 1  # trailing newline trimmed
+
+
+def test_more_than_one_million_characters_are_rejected():
+    assert _error("big.txt", ("가" * 1_000_001).encode()) == ("FILE_TOO_LARGE", 413)
+
+
+def test_pdf_page_limit_is_2000():
+    assert documents.MAX_PDF_PAGES == 2000
