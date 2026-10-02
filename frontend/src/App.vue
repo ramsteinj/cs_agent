@@ -5,14 +5,19 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import LoginModal from '@/components/LoginModal.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 import { useToastStore } from '@/stores/toast'
 
 const auth = useAuthStore()
+const chat = useChatStore()
 const toast = useToastStore()
 const route = useRoute()
 const router = useRouter()
 
-onMounted(() => auth.init())
+onMounted(() => {
+  auth.init()
+  chat.loadStatus()
+})
 
 async function logout() {
   await auth.logout().catch(() => {})
@@ -25,7 +30,7 @@ async function logout() {
   <div class="d-flex flex-column h-100">
     <nav class="navbar navbar-expand-md navbar-dark bg-primary">
       <div class="container-fluid">
-        <RouterLink class="navbar-brand" to="/">고객지원 챗봇</RouterLink>
+        <RouterLink class="navbar-brand" to="/">{{ chat.botName }}</RouterLink>
         <button
           class="navbar-toggler"
           type="button"

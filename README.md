@@ -38,7 +38,7 @@ PostgreSQL 18 + pgvector
 | 0 | 요구 사항 정의 (`CLAUDE.md`, `specs/`) | ✅ 완료 |
 | 1 | 기반 구성 (DB, Django, Vue, User 모델) | ✅ 완료 |
 | 2 | 계정 (로그인, 기본 관리자, 비밀번호 변경) | ✅ 완료 |
-| 3 | 시스템 설정 (API Key) | ⏳ 예정 |
+| 3 | 시스템 설정 (API Key 암호화 저장, 챗봇 설정, 채팅 활성 상태) | ✅ 완료 |
 | 4 | 지식 관리 (회사/제품 CRUD, 임베딩) | ⏳ 예정 |
 | 5 | 챗봇 (RAG + Claude 스트리밍) | ⏳ 예정 |
 | 6 | 마무리 | ⏳ 예정 |
@@ -68,7 +68,9 @@ cd backend
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env                # DJANGO_SECRET_KEY, DATABASE_URL 설정
+cp .env.example .env                # DJANGO_SECRET_KEY, DATABASE_URL, FIELD_ENCRYPTION_KEY 설정
+# FIELD_ENCRYPTION_KEY 생성 (없거나 잘못되면 서버가 시작되지 않음):
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 python manage.py migrate
 python manage.py runserver 8000
 ```
@@ -81,7 +83,7 @@ npm install
 npm run dev                         # /api 요청은 Django(8000)로 프록시
 ```
 
-브라우저에서 http://localhost:5173 을 열면 "서버 연결: 정상"이 표시됩니다(채팅 화면은 Phase 3/5에서 구현).
+브라우저에서 http://localhost:5173 을 열면 채팅 화면이 표시됩니다. API Key가 등록되기 전에는 "현재 상담 서비스를 준비 중입니다."가 표시되고 입력창이 비활성화됩니다. 질문 전송과 답변은 Phase 5에서 구현됩니다.
 
 ### 관리자 로그인
 
@@ -89,6 +91,13 @@ npm run dev                         # /api 요청은 Django(8000)로 프록시
 - 화면 상단 우측 **관리자 로그인** → 로그인 후 사용자 메뉴에서 **관리자 페이지**로 이동합니다.
 - 기본 비밀번호 사용 중에는 경고 배너가 표시됩니다. **시스템 설정 → 비밀번호 변경**에서 바꿔 주세요.
 - 같은 아이디로 5회 연속 실패하면 5분간 로그인이 차단되며, 로그인 요청은 IP당 분당 10회로 제한됩니다.
+
+### Claude API Key 및 챗봇 설정
+
+- **관리자 페이지 → 시스템 설정 → Claude API Key**에 Anthropic API Key를 입력하면, 저장 전에 Anthropic API로 유효성을 확인합니다.
+- 키는 `FIELD_ENCRYPTION_KEY`로 암호화되어 PostgreSQL에 저장되며, 화면에는 `sk-ant-...abcd` 형태로만 표시됩니다. `FIELD_ENCRYPTION_KEY`를 바꾸면 기존 키를 복호화할 수 없으므로 다시 입력해야 합니다.
+- 키를 등록하면 고객 채팅이 활성화되고, 삭제하면 즉시 비활성화됩니다.
+- **챗봇 설정**에서 Claude 모델(`claude-opus-5-5` 기본, `claude-sonnet-5-5`, `claude-haiku-4-5`), 챗봇 이름, 환영 메시지, 추가 지시사항(최대 2,000자)을 바꿀 수 있습니다.
 
 ### 테스트 및 린트
 
@@ -107,8 +116,8 @@ cs_agent/
 │   ├── common/          # 공통 에러 형식, 권한(IsAdminRole), 페이지네이션, health API
 │   ├── accounts/        # User(AbstractUser + role), 로그인/로그아웃/비밀번호 변경, 기본 관리자 생성
 │   ├── knowledge/       # (Phase 4) 회사·제품, pgvector
-│   ├── chat/            # (Phase 3, 5) 챗봇
-│   └── settings_app/    # (Phase 3) API Key 등 시스템 설정
+│   ├── chat/            # 챗봇 상태 API (메시지/RAG는 Phase 5)
+│   └── settings_app/    # SystemSetting: 암호화된 API Key, 모델·챗봇 설정
 └── frontend/            # Vue 3 + Vite + Bootstrap 5.0 SPA
     └── src/             # api/, router/, views/, assets/
 ```

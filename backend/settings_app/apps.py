@@ -4,3 +4,9 @@ from django.apps import AppConfig
 class SettingsAppConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "settings_app"
+
+    def ready(self):
+        # Fail fast at startup when FIELD_ENCRYPTION_KEY is missing or invalid.
+        from .crypto import get_fernet
+
+        get_fernet()

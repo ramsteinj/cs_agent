@@ -1,31 +1,55 @@
 <script setup>
-// Phase 1 placeholder: verifies the SPA -> Django connection.
-// Replaced by the chat UI in Phase 3/5 (specs/06-frontend.md §5.1).
-import { onMounted, ref } from 'vue'
+// Phase 3: status + disabled state. Sending and streaming answers come in Phase 5.
+import { computed } from 'vue'
 
-import { fetchHealth } from '@/api/health'
+import ChatInput from '@/components/ChatInput.vue'
+import { useChatStore } from '@/stores/chat'
 
-const status = ref('checking') // checking | ok | error
+const DISABLED_MESSAGE = '현재 상담 서비스를 준비 중입니다.'
+const ERROR_MESSAGE = '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
 
-onMounted(async () => {
-  try {
-    const data = await fetchHealth()
-    status.value = data.status === 'ok' ? 'ok' : 'error'
-  } catch {
-    status.value = 'error'
-  }
-})
+// Status is loaded once by App.vue (and refreshed after admin setting changes).
+const chat = useChatStore()
+
+const inputDisabled = computed(() => !chat.statusLoaded || !chat.enabled)
+const placeholder = computed(() =>
+  chat.statusLoaded && !chat.enabled ? DISABLED_MESSAGE : '메시지를 입력하세요.',
+)
 </script>
 
 <template>
-  <div class="container py-5">
-    <h1 class="h4 mb-3">고객지원 챗봇</h1>
-    <p v-if="status === 'checking'" class="text-muted" data-test="health">
-      서버 연결을 확인하는 중입니다...
-    </p>
-    <div v-else-if="status === 'ok'" class="alert alert-success" data-test="health">
-      서버 연결: 정상
+  <div class="container py-3 d-flex flex-column chat-view">
+    <h1 class="h5 mb-3">{{ chat.botName }}</h1>
+
+    <div class="flex-grow-1 overflow-auto mb-3" aria-live="polite">
+      <div v-if="!chat.statusLoaded" class="text-muted small" data-test="chat-loading">
+        상담 서비스를 확인하는 중입니다...
+      </div>
+      <div v-else-if="chat.statusError" class="alert alert-danger" data-test="chat-notice">
+        {{ ERROR_MESSAGE }}
+      </div>
+      <div v-else-if="!chat.enabled" class="alert alert-secondary" data-test="chat-notice">
+        {{ DISABLED_MESSAGE }}
+      </div>
+      <div v-else class="d-flex" data-test="welcome">
+        <div class="bg-light border rounded-3 px-3 py-2 chat-bubble">
+          {{ chat.welcomeMessage }}
+        </div>
+      </div>
     </div>
-    <div v-else class="alert alert-danger" data-test="health">서버에 연결할 수 없습니다.</div>
+
+    <ChatInput :disabled="inputDisabled" :placeholder="placeholder" />
   </div>
 </template>
+
+<style scoped>
+.chat-view {
+  height: 100%;
+  max-width: 48rem;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  white-space: pre-wrap;
+}
+</style>

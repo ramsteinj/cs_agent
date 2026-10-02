@@ -7,6 +7,10 @@ ADMIN_ENDPOINTS = [
     ("get", "/api/auth/me"),
     ("post", "/api/auth/logout"),
     ("post", "/api/auth/change-password"),
+    ("get", "/api/admin/settings"),
+    ("patch", "/api/admin/settings"),
+    ("put", "/api/admin/settings/api-key"),
+    ("delete", "/api/admin/settings/api-key"),
 ]
 
 

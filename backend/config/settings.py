@@ -102,6 +102,10 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"login": "10/min"},
 }
 
+# Fernet key used to encrypt the Anthropic API Key in the DB (specs/07-security.md §3).
+# Validated at startup by settings_app (missing/invalid -> ImproperlyConfigured).
+FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default="")
+
 # Login lockout policy (specs/07-security.md §2)
 LOGIN_MAX_FAILED_ATTEMPTS = 5
 LOGIN_LOCK_MINUTES = 5
@@ -116,5 +120,6 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "loggers": {
         "accounts": {"handlers": ["console"], "level": "INFO"},
+        "settings_app": {"handlers": ["console"], "level": "INFO"},
     },
 }
