@@ -52,7 +52,7 @@ class TestProductApi:
         response = admin_client.post(URL, {}, format="json")
 
         assert response.status_code == 400
-        assert {"company", "name", "description"} <= set(response.json()["error"]["details"])
+        assert {"company", "name"} <= set(response.json()["error"]["details"])
 
     def test_update_rebuilds_chunks(self, admin_client):
         product = make_product(make_company())

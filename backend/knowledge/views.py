@@ -1,16 +1,25 @@
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, Q
-from rest_framework import filters, viewsets
+from django.shortcuts import get_object_or_404
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action, api_view
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 from common.audit import audit
 from settings_app.models import SystemSetting
 
 from . import services
-from .indexing import reindex_all
-from .models import Company, KnowledgeChunk, Product
-from .serializers import CompanySerializer, ProductSerializer
+from .documents import extract_text
+from .indexing import reindex_all, reindex_product
+from .models import Company, KnowledgeChunk, Product, ProductDocument
+from .serializers import (
+    CompanySerializer,
+    DocumentUploadSerializer,
+    ProductDocumentSerializer,
+    ProductSerializer,
+)
 
 
 class CompanyViewSet(viewsets.ModelViewSet):
@@ -48,7 +57,10 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = (
             Product.objects.select_related("company")
-            .annotate(chunk_count=Count("chunks", distinct=True))
+            .annotate(
+                chunk_count=Count("chunks", distinct=True),
+                document_count=Count("documents", distinct=True),
+            )
             .order_by("name", "id")
         )
         params = self.request.query_params
@@ -80,6 +92,55 @@ class ProductViewSet(viewsets.ModelViewSet):
             .distinct()
         )
         return Response(list(categories))
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="documents",
+        parser_classes=[MultiPartParser],
+    )
+    def documents(self, request, pk=None):
+        """GET: list documents. POST (multipart `file`): extract text, store, reindex."""
+        product = self.get_object()
+        if request.method == "GET":
+            return Response(ProductDocumentSerializer(product.documents.all(), many=True).data)
+
+        upload = DocumentUploadSerializer(data=request.data)
+        upload.is_valid(raise_exception=True)
+        file_name, file_type, file_size, text = extract_text(upload.validated_data["file"])
+        with transaction.atomic():
+            document = ProductDocument.objects.create(
+                product=product,
+                file_name=file_name,
+                file_type=file_type,
+                file_size=file_size,
+                text=text,
+            )
+            reindex_product(product)
+        audit(
+            "product_document_uploaded",
+            request.user,
+            product=product.pk,
+            document=document.pk,
+            name=file_name,
+        )
+        return Response(ProductDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["delete"], url_path=r"documents/(?P<document_id>\d+)")
+    def delete_document(self, request, pk=None, document_id=None):
+        product = self.get_object()
+        document = get_object_or_404(ProductDocument, pk=document_id, product=product)
+        with transaction.atomic():
+            document.delete()
+            reindex_product(product)
+        audit(
+            "product_document_deleted",
+            request.user,
+            product=product.pk,
+            document=document_id,
+            name=document.file_name,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["POST"])

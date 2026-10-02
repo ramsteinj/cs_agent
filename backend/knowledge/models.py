@@ -27,7 +27,7 @@ class Product(TimeStampedModel):
     name = models.CharField(max_length=200)
     category = models.CharField(max_length=100, blank=True, db_index=True)
     summary = models.CharField(max_length=500, blank=True)
-    description = models.TextField()
+    description = models.TextField(blank=True)  # optional: documents can carry the content
     price = models.CharField(max_length=100, blank=True)
     features = models.TextField(blank=True)
     usage_guide = models.TextField(blank=True)
@@ -44,6 +44,27 @@ class Product(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class ProductDocument(TimeStampedModel):
+    """Text extracted from an uploaded .txt / .docx / .pdf (the file itself is not kept)."""
+
+    class FileType(models.TextChoices):
+        TXT = "txt", "Text"
+        DOCX = "docx", "MS Word"
+        PDF = "pdf", "PDF"
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="documents")
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=10, choices=FileType.choices)
+    file_size = models.PositiveIntegerField()
+    text = models.TextField()
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return self.file_name
 
 
 class KnowledgeChunk(TimeStampedModel):

@@ -48,6 +48,11 @@ def product_document(product):
     return header, "\n".join(lines)
 
 
+def document_header(product, file_name):
+    """Header for chunks of an uploaded product document."""
+    return f"[제품] {product.name} ({product.company.name}) / 문서: {file_name}"
+
+
 def _sentences(body):
     """Split into sentences, keeping paragraph breaks as boundaries."""
     parts = []

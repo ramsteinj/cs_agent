@@ -5,11 +5,12 @@ const LEAVE_MESSAGE = '저장하지 않은 변경 사항이 있습니다. 페이
 
 /**
  * Confirm before leaving a form with unsaved changes (specs/06 §5.4).
- * Call markClean(form) after loading or saving.
+ * Call markClean() after loading or saving. `extraDirty` covers state outside `form`
+ * (e.g. files waiting to be uploaded).
  */
-export function useUnsavedGuard(form) {
+export function useUnsavedGuard(form, extraDirty = () => false) {
   const snapshot = ref(JSON.stringify(form))
-  const dirty = computed(() => JSON.stringify(form) !== snapshot.value)
+  const dirty = computed(() => JSON.stringify(form) !== snapshot.value || extraDirty())
 
   function markClean() {
     snapshot.value = JSON.stringify(form)

@@ -153,16 +153,17 @@ onMounted(() => {
             <th scope="col" class="d-none d-md-table-cell">카테고리</th>
             <th scope="col" class="d-none d-md-table-cell">가격</th>
             <th scope="col">상태</th>
+            <th scope="col" class="text-end d-none d-md-table-cell">문서</th>
             <th scope="col" class="text-end d-none d-md-table-cell">청크</th>
             <th scope="col" class="text-end">작업</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="7" class="text-center text-muted">불러오는 중...</td>
+            <td colspan="8" class="text-center text-muted">불러오는 중...</td>
           </tr>
           <tr v-else-if="!products.length">
-            <td colspan="7" class="text-center text-muted" data-test="empty">
+            <td colspan="8" class="text-center text-muted" data-test="empty">
               등록된 제품이 없습니다.
             </td>
           </tr>
@@ -176,6 +177,7 @@ onMounted(() => {
                 {{ product.is_active ? '활성' : '비활성' }}
               </span>
             </td>
+            <td class="text-end d-none d-md-table-cell">{{ product.document_count }}</td>
             <td class="text-end d-none d-md-table-cell">{{ product.chunk_count }}</td>
             <td class="text-end text-nowrap">
               <RouterLink

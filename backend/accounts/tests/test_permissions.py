@@ -25,6 +25,9 @@ ADMIN_ENDPOINTS = [
     ("get", "/api/admin/products/categories"),
     ("patch", "/api/admin/products/1"),
     ("delete", "/api/admin/products/1"),
+    ("get", "/api/admin/products/1/documents"),
+    ("post", "/api/admin/products/1/documents"),
+    ("delete", "/api/admin/products/1/documents/1"),
     ("post", "/api/admin/knowledge/reindex"),
     ("get", "/api/admin/knowledge/stats"),
 ]

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import Company, Product
+from .models import Company, Product, ProductDocument
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -44,6 +44,7 @@ class CompanySerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.name", read_only=True)
+    document_count = serializers.SerializerMethodField()
     chunk_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -61,6 +62,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "usage_guide",
             "faq",
             "is_active",
+            "document_count",
             "chunk_count",
             "created_at",
             "updated_at",
@@ -71,6 +73,10 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_chunk_count(self, obj):
         count = getattr(obj, "chunk_count", None)
         return obj.chunks.count() if count is None else count
+
+    def get_document_count(self, obj):
+        count = getattr(obj, "document_count", None)
+        return obj.documents.count() if count is None else count
 
     def validate(self, attrs):
         company = attrs.get("company", getattr(self.instance, "company", None))
@@ -83,3 +89,35 @@ class ProductSerializer(serializers.ModelSerializer):
                 {"name": ["이 회사에 같은 이름의 제품이 이미 있습니다."]}, code="unique"
             )
         return attrs
+
+
+class ProductDocumentSerializer(serializers.ModelSerializer):
+    """Document metadata only: the full extracted text is not returned."""
+
+    PREVIEW_CHARS = 200
+
+    char_count = serializers.SerializerMethodField()
+    preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductDocument
+        fields = [
+            "id",
+            "file_name",
+            "file_type",
+            "file_size",
+            "char_count",
+            "preview",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_char_count(self, obj):
+        return len(obj.text)
+
+    def get_preview(self, obj):
+        return obj.text[: self.PREVIEW_CHARS]
+
+
+class DocumentUploadSerializer(serializers.Serializer):
+    file = serializers.FileField(allow_empty_file=False)

@@ -12,7 +12,7 @@ from rest_framework import status
 from common.exceptions import ApiError
 
 from . import embeddings
-from .chunking import chunk_text, company_document, product_document
+from .chunking import chunk_text, company_document, document_header, product_document
 from .models import Company, KnowledgeChunk
 
 logger = logging.getLogger(__name__)
@@ -35,9 +35,14 @@ def _chunk_settings():
     return setting.chunk_max_chars, setting.chunk_overlap_chars
 
 
-def _make_chunks(source_type, source, company, product, header, body, searchable):
+def _make_chunks(source_type, source, company, product, sections, searchable):
+    """Chunk every (header, body) section, embed them in one batch, number them in order."""
     max_chars, overlap = _chunk_settings()
-    texts = chunk_text(header, body, max_chars=max_chars, overlap=overlap)
+    texts = [
+        text
+        for header, body in sections
+        for text in chunk_text(header, body, max_chars=max_chars, overlap=overlap)
+    ]
     try:
         vectors = embeddings.embed_passages(texts)
         model_name = embeddings.model_name()
@@ -67,14 +72,18 @@ def _replace(source_type, source_id, chunks):
 
 
 def reindex_product(product):
-    header, body = product_document(product)
+    """Product fields first, then each uploaded document (specs/05 §2.1)."""
+    sections = [product_document(product)]
+    sections += [
+        (document_header(product, document.file_name), document.text)
+        for document in product.documents.all()
+    ]
     chunks = _make_chunks(
         KnowledgeChunk.SourceType.PRODUCT,
         product,
         product.company,
         product,
-        header,
-        body,
+        sections,
         searchable=product.is_active,
     )
     return _replace(KnowledgeChunk.SourceType.PRODUCT, product.pk, chunks)
@@ -82,13 +91,17 @@ def reindex_product(product):
 
 def reindex_company(company, include_products=True):
     """Re-chunk a company. Product chunks embed the company name, so they follow too."""
-    header, body = company_document(company)
     chunks = _make_chunks(
-        KnowledgeChunk.SourceType.COMPANY, company, company, None, header, body, searchable=True
+        KnowledgeChunk.SourceType.COMPANY,
+        company,
+        company,
+        None,
+        [company_document(company)],
+        searchable=True,
     )
     count = _replace(KnowledgeChunk.SourceType.COMPANY, company.pk, chunks)
     if include_products:
-        for product in company.products.select_related("company"):
+        for product in company.products.select_related("company").prefetch_related("documents"):
             count += reindex_product(product)
     return count
 

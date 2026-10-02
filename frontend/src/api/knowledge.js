@@ -71,3 +71,22 @@ export async function getStats() {
   const { data } = await client.get('/admin/knowledge/stats')
   return data
 }
+
+// --- Product documents (Text / MS Word / PDF) ----------------------------------
+export async function listProductDocuments(productId) {
+  const { data } = await client.get(`/admin/products/${productId}/documents`)
+  return data
+}
+
+export async function uploadProductDocument(productId, file) {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await client.post(`/admin/products/${productId}/documents`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function deleteProductDocument(productId, documentId) {
+  await client.delete(`/admin/products/${productId}/documents/${documentId}`)
+}

@@ -16,7 +16,7 @@ Customer support agent created by vibe coding.
 
 - 화면 상단 우측 ID/비밀번호 로그인
 - 최초 실행 시 기본 관리자 계정 자동 생성 (`admin` / `admin1234!` — 로그인 후 반드시 변경)
-- 회사·제품 정보 생성/수정/삭제 (pgvector 자동 색인)
+- 회사·제품 정보 생성/수정/삭제 (pgvector 자동 색인). 제품 정보는 직접 입력(Text) 또는 MS Word(.docx)·PDF·텍스트 파일 업로드
 - LLM 선택(ChatGPT / Claude / Gemini), 공급자별 API Key 등록(PostgreSQL에 암호화 저장)과 모델 선택 (Claude 기본 Opus 5.5)
 - RAG 튜닝 설정(임베딩 모델, 청크, 검색, 대화 기록 등) 관리자 화면에서 변경
 
@@ -45,7 +45,7 @@ PostgreSQL 18 + pgvector
 | 6 | 마무리 (보안 설정, 감사 로그, 세션 정리, 모바일·접근성 점검) | ✅ 완료 |
 | 7 | 요구 사항 변경 ① RAG 튜닝 설정 DB 저장·관리자 화면 | ✅ 완료 |
 | 8 | 요구 사항 변경 ② LLM 공급자 선택 (ChatGPT / Claude / Gemini) | ✅ 완료 |
-| 9 | 요구 사항 변경 ③ 제품 정보 Text / Word / PDF 입력 | ⏳ 진행 예정 |
+| 9 | 요구 사항 변경 ③ 제품 정보 Text / Word / PDF 입력 | ✅ 완료 |
 
 ## 실행 방법
 
@@ -108,6 +108,7 @@ npm run dev                         # /api 요청은 Django(8000)로 프록시
 
 - **관리자 페이지 → 회사 관리 / 제품 관리**에서 정보를 등록·수정·삭제합니다. 저장하면 내용을 청크로 나누고 임베딩을 만들어 pgvector(`KnowledgeChunk`)에 저장합니다.
 - 회사를 삭제하면 소속 제품과 청크도 함께 삭제됩니다. **판매 중**을 끈 제품은 챗봇 답변 근거에서 제외됩니다.
+- **제품 문서 (Text / Word / PDF)**: 제품 등록·수정 화면에서 `.txt`, `.docx`, `.pdf` 파일(파일당 10MB, 여러 개)을 올리면 텍스트를 추출해 제품 정보로 색인합니다. 상세 설명 없이 문서만으로도 등록할 수 있습니다. 원본 파일은 저장하지 않고 추출한 텍스트만 DB에 저장합니다. 구형 `.doc`, 암호가 걸린 PDF, 텍스트가 없는 스캔 PDF는 거부됩니다.
 - 임베딩 모델 `intfloat/multilingual-e5-small`(384차원)은 첫 사용 시 Hugging Face에서 자동으로 내려받습니다(약 470MB, `~/.cache/huggingface`).
 - **시스템 설정 → 지식 색인**에서 통계를 보고 전체 재색인을 실행할 수 있습니다.
 - 데모용 가상 데이터(회사 1개, 제품 3개): `python manage.py load_sample_knowledge` (다시 만들려면 `--reset`)
@@ -168,7 +169,7 @@ cs_agent/
 │   ├── config/          # settings, urls
 │   ├── common/          # 공통 에러 형식(404/500 포함), 권한(IsAdminRole), 페이지네이션, 감사 로그, health API
 │   ├── accounts/        # User(AbstractUser + role), 로그인/로그아웃/비밀번호 변경, 기본 관리자 생성
-│   ├── knowledge/       # 회사·제품 CRUD, 청킹·임베딩·pgvector 색인, 벡터 검색
+│   ├── knowledge/       # 회사·제품 CRUD, 제품 문서(txt/docx/pdf) 텍스트 추출, 청킹·임베딩·pgvector 색인, 벡터 검색
 │   ├── llm/             # LLM 공급자(Claude/ChatGPT/Gemini) 공통 인터페이스 — 유일한 LLM 호출 지점
 │   ├── chat/            # 챗봇 상태·세션·SSE 메시지 API, RAG 오케스트레이션
 │   └── settings_app/    # SystemSetting(LLM 선택·챗봇·RAG 설정), LLMProviderConfig(공급자별 암호화 키·모델)

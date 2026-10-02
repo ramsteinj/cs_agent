@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { getErrorMessage, getFieldErrors } from '@/api/client'
 import * as knowledgeApi from '@/api/knowledge'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import LoadingButton from '@/components/LoadingButton.vue'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useToastStore } from '@/stores/toast'
@@ -12,8 +13,18 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToastStore()
 
-const id = computed(() => route.params.id)
-const isEdit = computed(() => Boolean(id.value))
+// Set from the route when editing, or after the first save of a new product.
+const productId = ref(route.params.id || null)
+const isEdit = computed(() => Boolean(productId.value))
+
+// --- Product documents (Text / MS Word / PDF, specs/06 §5.6) -------------------
+const ACCEPTED = ['txt', 'docx', 'pdf']
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+const documents = ref([])
+const pendingFiles = ref([]) // { key, file, error }
+const fileErrors = ref([])
+const pendingDelete = ref(null)
+let nextFileKey = 1
 
 const form = reactive({
   company: route.query.company ? Number(route.query.company) : '',
@@ -27,7 +38,7 @@ const form = reactive({
   faq: '',
   is_active: true,
 })
-const { markClean } = useUnsavedGuard(form)
+const { markClean } = useUnsavedGuard(form, () => pendingFiles.value.length > 0)
 
 const companies = ref([])
 const categories = ref([])
@@ -38,11 +49,13 @@ const saving = ref(false)
 
 onMounted(async () => {
   try {
-    const [companyList, categoryList, product] = await Promise.all([
+    const [companyList, categoryList, product, documentList] = await Promise.all([
       knowledgeApi.listAllCompanies(),
       knowledgeApi.listCategories(),
-      isEdit.value ? knowledgeApi.getProduct(id.value) : Promise.resolve(null),
+      isEdit.value ? knowledgeApi.getProduct(productId.value) : Promise.resolve(null),
+      isEdit.value ? knowledgeApi.listProductDocuments(productId.value) : Promise.resolve([]),
     ])
+    documents.value = documentList || []
     companies.value = companyList
     categories.value = categoryList
     if (product) {
@@ -56,16 +69,79 @@ onMounted(async () => {
   }
 })
 
-const canSave = computed(() => form.company !== '' && form.name.trim() && form.description.trim())
+// Either a description or at least one document must carry the product information.
+const hasContent = computed(
+  () =>
+    Boolean(form.description.trim()) || documents.value.length > 0 || pendingFiles.value.length > 0,
+)
+const canSave = computed(() => form.company !== '' && Boolean(form.name.trim()) && hasContent.value)
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function addFiles(event) {
+  fileErrors.value = []
+  for (const file of event.target.files) {
+    const extension = file.name.split('.').pop().toLowerCase()
+    if (!file.name.includes('.') || !ACCEPTED.includes(extension)) {
+      fileErrors.value.push(`${file.name}: Text(.txt), Word(.docx), PDF 파일만 올릴 수 있습니다.`)
+    } else if (file.size > MAX_FILE_BYTES) {
+      fileErrors.value.push(`${file.name}: 10MB 이하 파일만 올릴 수 있습니다.`)
+    } else {
+      pendingFiles.value.push({ key: nextFileKey++, file, error: '' })
+    }
+  }
+  event.target.value = '' // allow choosing the same file again
+}
+
+function removePending(item) {
+  pendingFiles.value = pendingFiles.value.filter((p) => p !== item)
+}
+
+/** Upload queued files one by one; failed ones stay queued with their error. */
+async function uploadPending() {
+  let failed = 0
+  for (const item of [...pendingFiles.value]) {
+    item.error = ''
+    try {
+      documents.value.push(await knowledgeApi.uploadProductDocument(productId.value, item.file))
+      removePending(item)
+    } catch (err) {
+      item.error = getErrorMessage(err)
+      failed += 1
+    }
+  }
+  return failed
+}
+
+async function confirmDeleteDocument() {
+  const document = pendingDelete.value
+  pendingDelete.value = null
+  try {
+    await knowledgeApi.deleteProductDocument(productId.value, document.id)
+    documents.value = documents.value.filter((d) => d.id !== document.id)
+    toast.show('문서를 삭제했습니다.')
+  } catch (err) {
+    toast.show(getErrorMessage(err), 'danger')
+  }
+}
 
 async function save() {
   errors.value = {}
   generalError.value = ''
   saving.value = true
   try {
-    if (isEdit.value) await knowledgeApi.updateProduct(id.value, { ...form })
-    else await knowledgeApi.createProduct({ ...form })
+    if (isEdit.value) await knowledgeApi.updateProduct(productId.value, { ...form })
+    else productId.value = (await knowledgeApi.createProduct({ ...form })).id
     markClean()
+    const failed = await uploadPending()
+    if (failed) {
+      toast.show(`제품은 저장했지만 문서 ${failed}개를 올리지 못했습니다.`, 'warning')
+      return
+    }
     toast.show('저장되었습니다.')
     router.push('/admin/products')
   } catch (err) {
@@ -85,7 +161,7 @@ const textareas = [
 
 <template>
   <div class="form-view">
-    <h1 class="h4 mb-3">{{ isEdit ? '제품 정보 수정' : '제품 등록' }}</h1>
+    <h1 class="h4 mb-3">{{ route.params.id ? '제품 정보 수정' : '제품 등록' }}</h1>
 
     <div v-if="loading" class="text-muted">불러오는 중...</div>
     <form v-else novalidate @submit.prevent="save">
@@ -164,7 +240,7 @@ const textareas = [
         <div class="invalid-feedback">{{ errors.summary }}</div>
       </div>
       <div class="mb-3">
-        <label for="product-description" class="form-label">상세 설명 *</label>
+        <label for="product-description" class="form-label">상세 설명</label>
         <textarea
           id="product-description"
           v-model="form.description"
@@ -173,6 +249,7 @@ const textareas = [
           :class="{ 'is-invalid': errors.description }"
         ></textarea>
         <div class="invalid-feedback">{{ errors.description }}</div>
+        <div class="form-text">상세 설명 또는 아래 제품 문서 중 하나 이상이 필요합니다.</div>
       </div>
       <div v-for="field in textareas" :key="field.key" class="mb-3">
         <label :for="`product-${field.key}`" class="form-label">{{ field.label }}</label>
@@ -185,6 +262,71 @@ const textareas = [
         ></textarea>
         <div class="invalid-feedback">{{ errors[field.key] }}</div>
       </div>
+      <fieldset class="border rounded p-3 mb-3" data-test="documents">
+        <legend class="float-none w-auto px-1 fs-6 mb-0">제품 문서 (Text / Word / PDF)</legend>
+        <p class="form-text mt-0">
+          .txt, .docx, .pdf 파일에서 텍스트를 추출해 제품 정보로 사용합니다. (파일당 10MB, 스캔한
+          이미지 PDF·구형 .doc 제외)
+        </p>
+
+        <ul v-if="documents.length" class="list-group mb-2" data-test="document-list">
+          <li
+            v-for="doc in documents"
+            :key="doc.id"
+            class="list-group-item d-flex align-items-center gap-2"
+          >
+            <span class="badge bg-secondary text-uppercase">{{ doc.file_type }}</span>
+            <span class="text-break flex-grow-1">{{ doc.file_name }}</span>
+            <small class="text-muted text-nowrap">
+              {{ formatSize(doc.file_size) }} · {{ doc.char_count.toLocaleString() }}자
+            </small>
+            <button
+              type="button"
+              class="btn btn-outline-danger btn-sm"
+              :aria-label="`${doc.file_name} 삭제`"
+              data-test="delete-document"
+              @click="pendingDelete = doc"
+            >
+              삭제
+            </button>
+          </li>
+        </ul>
+
+        <ul v-if="pendingFiles.length" class="list-group mb-2" data-test="pending-list">
+          <li v-for="item in pendingFiles" :key="item.key" class="list-group-item">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-info text-dark">저장 시 업로드</span>
+              <span class="text-break flex-grow-1">{{ item.file.name }}</span>
+              <small class="text-muted text-nowrap">{{ formatSize(item.file.size) }}</small>
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                :aria-label="`${item.file.name} 제외`"
+                @click="removePending(item)"
+              >
+                제외
+              </button>
+            </div>
+            <div v-if="item.error" class="text-danger small mt-1" data-test="upload-error">
+              {{ item.error }}
+            </div>
+          </li>
+        </ul>
+
+        <label for="product-files" class="form-label small mb-1">파일 추가</label>
+        <input
+          id="product-files"
+          type="file"
+          class="form-control"
+          accept=".txt,.docx,.pdf"
+          multiple
+          @change="addFiles"
+        />
+        <div v-for="message in fileErrors" :key="message" class="text-danger small mt-1">
+          {{ message }}
+        </div>
+      </fieldset>
+
       <div class="form-check form-switch mb-4">
         <input
           id="product-active"
@@ -210,6 +352,19 @@ const textareas = [
         <RouterLink to="/admin/products" class="btn btn-outline-secondary">목록</RouterLink>
       </div>
     </form>
+
+    <ConfirmDialog
+      :show="!!pendingDelete"
+      title="문서 삭제"
+      :message="
+        pendingDelete
+          ? `'${pendingDelete.file_name}' 문서를 삭제하시겠습니까? 이 문서의 내용은 챗봇 답변에 더 이상 사용되지 않습니다.`
+          : ''
+      "
+      confirm-text="삭제"
+      @confirm="confirmDeleteDocument"
+      @cancel="pendingDelete = null"
+    />
   </div>
 </template>
 
