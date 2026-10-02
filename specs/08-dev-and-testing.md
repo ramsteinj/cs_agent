@@ -11,7 +11,7 @@ services:
       POSTGRES_DB: cs_agent
       POSTGRES_USER: cs_agent
       POSTGRES_PASSWORD: cs_agent
-    ports: ["5432:5432"]
+    ports: ["${POSTGRES_PORT:-5432}:5432"]   # 호스트 5432가 사용 중이면 루트 .env에 POSTGRES_PORT 지정
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cs_agent"]
@@ -26,7 +26,7 @@ volumes:
 | `DJANGO_SECRET_KEY` | (랜덤) | 필수 |
 | `DJANGO_DEBUG` | `True` | |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | |
-| `DATABASE_URL` | `postgres://cs_agent:cs_agent@localhost:5432/cs_agent` | |
+| `DATABASE_URL` | `postgres://cs_agent:cs_agent@localhost:5432/cs_agent` | 포트는 `POSTGRES_PORT`와 일치 |
 | `FIELD_ENCRYPTION_KEY` | (Fernet 키) | 필수, API Key 암호화 |
 | `EMBEDDING_BACKEND` | `sentence_transformers` / `fake` | 테스트는 `fake` |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | |

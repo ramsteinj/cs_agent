@@ -51,23 +51,24 @@ cs_agent/
 ## 개발 명령어
 
 ```bash
-# DB
+# DB (호스트 5432 사용 중이면 루트 .env에 POSTGRES_PORT=5433)
 docker compose up -d db
 
 # Backend
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate          # post_migrate에서 기본 관리자 자동 생성
+python3.12 -m venv .venv && source .venv/bin/activate   # 또는 uv venv --python 3.12 .venv
+pip install -r requirements.txt                           # 또는 uv pip install -r requirements.txt
+python manage.py migrate          # (Phase 2부터) post_migrate에서 기본 관리자 자동 생성
 python manage.py runserver 8000
-pytest                            # 백엔드 테스트
+pytest && ruff check . && ruff format --check .
 
 # Frontend
 cd frontend
 npm install
 npm run dev                       # http://localhost:5173 (/api → :8000 프록시)
 npm run test                      # Vitest
-npm run lint
+npm run lint                      # ESLint + Prettier
+npm run build
 ```
 
 ## 코딩 규칙

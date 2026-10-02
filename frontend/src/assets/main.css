@@ -1,0 +1,14 @@
+/* Custom colors live here only (specs/06-frontend.md §7) */
+:root {
+  --cs-app-bg: #f8f9fa;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  background-color: var(--cs-app-bg);
+}

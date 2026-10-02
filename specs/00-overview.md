@@ -44,9 +44,11 @@
 
 | Phase | 내용 | 완료 조건 |
 |---|---|---|
-| 1. 기반 구성 | docker-compose(pgvector), Django 프로젝트, Vue+Vite 프로젝트, `/api/health` | 프론트에서 health 호출 성공 |
-| 2. 계정 | `accounts.User`, 기본 관리자 생성, 로그인/로그아웃/me API, 상단 우측 로그인 UI | specs/01 F-A1~A3 인수 조건 통과 |
-| 3. 시스템 설정 | `SystemSetting`, API Key 암호화 저장/검증/마스킹, 챗봇 상태 API | F-A6~A7, F-U2 통과 |
-| 4. 지식 관리 | Company/Product CRUD API + 관리자 화면, 청킹·임베딩·pgvector 저장 | F-A4~A5 통과 |
-| 5. 챗봇 | 검색 + Claude 스트리밍 응답, 채팅 UI | F-U1, F-U3~U5 통과 |
-| 6. 마무리 | 에러 처리, rate limit, 접근성, README 최종화 | 전체 인수 조건 통과 |
+| 1. 기반 구성 | docker-compose(pgvector), Django 프로젝트 + 앱 5개 골격, **`accounts.User` 모델과 `AUTH_USER_MODEL`(첫 migrate 전)**, `common` 공통 모듈, Vue+Vite 프로젝트, `/api/health` | 프론트에서 health 호출 성공, 첫 마이그레이션이 `accounts.User` 기준 |
+| 2. 계정 | 기본 관리자 생성, 로그인/로그아웃/me/비밀번호 변경 API, 상단 우측 로그인 UI, SettingsView(비밀번호 카드) | specs/01 F-A1~A3 인수 조건 통과 |
+| 3. 시스템 설정 | `SystemSetting`, API Key 암호화 저장/검증/마스킹, `GET /api/chat/status`, 채팅 비활성 UI | F-A6~A7 통과, F-U2 중 status/UI 부분 통과 |
+| 4. 지식 관리 | Company/Product CRUD API + 관리자 화면, 청킹·임베딩·pgvector 저장, 검색, 재색인(F-A8), `load_sample_knowledge` | F-A4~A5, F-A8 통과 |
+| 5. 챗봇 | 검색 + Claude 스트리밍 응답, 채팅 UI, 채팅 API 커스텀 rate limit | F-U1, F-U3~U5, F-U2(503) 통과 |
+| 6. 마무리 | 에러 처리, rate limit 점검, 접근성, `cleanup_chat_sessions`, 감사 로그, 운영 보안 설정, README 최종화 | 전체 인수 조건 통과 |
+
+> Phase 배정 조정 이유: `AUTH_USER_MODEL`은 첫 migrate 전에 설정해야 하므로 User 모델을 Phase 1로 옮겼다. chat 앱 골격은 Phase 1에서 만들고 status API만 Phase 3에서 구현한다. 채팅 메시지 API(503 확인 포함)는 Phase 5에 있다.
