@@ -314,3 +314,34 @@ class TestTemperature:
         assert body["temperature_supported"] is False
         # The stored value stays but is never sent to this model (llm tests cover that).
         assert body["temperature"] == 0.4
+
+
+@pytest.mark.django_db
+class TestSystemPrompt:
+    def test_default_prompt_is_returned(self, admin_client):
+        from chat.prompts import DEFAULT_SYSTEM_PROMPT
+
+        body = admin_client.get(SETTINGS_URL).json()
+
+        assert body["system_prompt"] == DEFAULT_SYSTEM_PROMPT
+        assert body["default_system_prompt"] == DEFAULT_SYSTEM_PROMPT
+
+    def test_update_prompt(self, admin_client):
+        response = admin_client.patch(
+            SETTINGS_URL, {"system_prompt": "  당신은 {bot_name}입니다.  "}, format="json"
+        )
+
+        assert response.status_code == 200
+        assert SystemSetting.load().system_prompt == "당신은 {bot_name}입니다."
+
+    @pytest.mark.parametrize("value", ["", "   \n  "])
+    def test_blank_prompt_rejected(self, admin_client, value):
+        response = admin_client.patch(SETTINGS_URL, {"system_prompt": value}, format="json")
+
+        assert response.status_code == 400
+        assert "system_prompt" in response.json()["error"]["details"]
+
+    def test_too_long_prompt_rejected(self, admin_client):
+        response = admin_client.patch(SETTINGS_URL, {"system_prompt": "가" * 10001}, format="json")
+
+        assert response.status_code == 400

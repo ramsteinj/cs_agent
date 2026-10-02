@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 
 import llm
+from chat.prompts import default_system_prompt
 from common.models import TimeStampedModel
 
 from . import crypto
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_BOT_NAME = "고객지원 챗봇"
 DEFAULT_WELCOME_MESSAGE = "안녕하세요! 회사와 제품에 대해 궁금한 점을 물어보세요."
 EXTRA_INSTRUCTIONS_MAX_LENGTH = 2000
+SYSTEM_PROMPT_MAX_LENGTH = 10000
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 
 # RAG tuning ranges (specs/05 §1.1): field -> (min, max)
@@ -39,6 +41,9 @@ class SystemSetting(TimeStampedModel):
     )
     bot_name = models.CharField(max_length=100, default=DEFAULT_BOT_NAME)
     welcome_message = models.TextField(default=DEFAULT_WELCOME_MESSAGE)
+    system_prompt = models.TextField(
+        default=default_system_prompt, max_length=SYSTEM_PROMPT_MAX_LENGTH
+    )
     extra_instructions = models.TextField(
         blank=True, default="", max_length=EXTRA_INSTRUCTIONS_MAX_LENGTH
     )

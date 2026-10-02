@@ -381,3 +381,20 @@ def test_ambiguous_product_names_are_detected(enabled):
 
     assert tv.pk in ids
     assert unique.pk not in ids
+
+
+@pytest.mark.django_db
+def test_custom_system_prompt_is_sent_to_the_llm(client, enabled, session):
+    _set(
+        system_prompt="당신은 {bot_name}입니다. 항상 존댓말로 답하세요.",
+        bot_name="OK봇",
+        extra_instructions="짧게",
+    )
+    reply, calls = _fake_reply(["네"])
+
+    with mock.patch("chat.services.llm.stream_reply", reply):
+        _events(_send(client, session))
+
+    assert calls[0]["system"] == (
+        "당신은 OK봇입니다. 항상 존댓말로 답하세요.\n\n운영자 추가 지시:\n짧게"
+    )

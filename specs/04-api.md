@@ -145,7 +145,7 @@ v1은 동기 실행(데이터 규모가 작다고 가정). DB advisory lock 또�
 | Method | Path | 설명 |
 |---|---|---|
 | GET | `/api/admin/settings` | 설정 조회 (사용할 LLM, 공급자별 키 상태·모델, 챗봇 표시) |
-| PATCH | `/api/admin/settings` | `llm_provider`, `bot_name`, `welcome_message`, `extra_instructions` 변경 |
+| PATCH | `/api/admin/settings` | `llm_provider`, `bot_name`, `welcome_message`, `system_prompt`, `extra_instructions` 변경 |
 | PUT | `/api/admin/settings/providers/{provider}/api-key` | 해당 공급자 API Key 등록·변경 (공급자 API로 검증 후 저장) |
 | DELETE | `/api/admin/settings/providers/{provider}/api-key` | API Key 삭제 → 204 |
 | PATCH | `/api/admin/settings/providers/{provider}` | 모델·temperature 변경 `{"model": "claude-haiku-4-5", "temperature": 0.3}` (temperature `null` = 모델 기본값) |
@@ -172,9 +172,12 @@ GET `/api/admin/settings` 응답:
   ],
   "bot_name": "고객지원 챗봇",
   "welcome_message": "...",
+  "system_prompt": "당신은 \"{bot_name}\"이며, ...",
+  "default_system_prompt": "당신은 \"{bot_name}\"이며, ...",
   "extra_instructions": ""
 }
 ```
+- `system_prompt`: 1~10,000자 (공백만은 불가). `default_system_prompt`는 읽기 전용 기본 문구로, 화면의 "기본값으로 되돌리기"에 쓴다.
 - PUT api-key 요청: `{ "api_key": "..." }` → 200 (GET과 동일 형식) / 400 `INVALID_API_KEY` / 502 `LLM_ERROR`(검증 불가)
 - GET models 응답: `{"models": ["claude-opus-5-5", "claude-sonnet-5-5", ...], "default_model": "claude-opus-5-5"}`
   - Claude: 권장 목록(`claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-4-5`) + 키가 있으면 Anthropic 모델 목록. 키가 없어도 권장 목록 반환.

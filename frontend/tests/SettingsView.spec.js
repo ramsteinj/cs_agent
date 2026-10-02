@@ -62,6 +62,8 @@ const BASE = {
   providers: PROVIDERS,
   bot_name: '고객지원 챗봇',
   welcome_message: '안녕하세요!',
+  system_prompt: '당신은 "{bot_name}"입니다. (수정됨)',
+  default_system_prompt: '당신은 "{bot_name}"입니다. (기본)',
   extra_instructions: '',
 }
 
@@ -119,6 +121,7 @@ describe('SettingsView', () => {
       expect(settingsApi.updateSettings).toHaveBeenCalledWith({
         bot_name: '고객지원 챗봇',
         welcome_message: '안녕하세요!',
+        system_prompt: '당신은 "{bot_name}"입니다. (수정됨)',
         extra_instructions: '친근하게',
       })
       expect(wrapper.get('#bot-extra').classes()).toContain('is-invalid')
@@ -130,6 +133,55 @@ describe('SettingsView', () => {
       await wrapper.get('#bot-extra').setValue('가나다')
 
       expect(wrapper.get('[data-test="extra-counter"]').text()).toBe('3/2000')
+    })
+  })
+
+  describe('system prompt', () => {
+    it('shows the stored prompt and resets it to the default', async () => {
+      settingsApi.updateSettings.mockResolvedValueOnce({
+        ...BASE,
+        system_prompt: BASE.default_system_prompt,
+      })
+      const wrapper = await mountView()
+      const textarea = wrapper.get('#bot-prompt')
+      expect(textarea.element.value).toBe(BASE.system_prompt)
+
+      await wrapper.get('[data-test="reset-prompt"]').trigger('click')
+      expect(textarea.element.value).toBe(BASE.default_system_prompt)
+      expect(settingsApi.updateSettings).not.toHaveBeenCalled() // only on save
+
+      await wrapper.get('[data-test="bot-card"] form').trigger('submit')
+      await flushPromises()
+
+      expect(settingsApi.updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ system_prompt: BASE.default_system_prompt }),
+      )
+      expect(wrapper.get('[data-test="reset-prompt"]').attributes('disabled')).toBeDefined()
+    })
+
+    it('shows the counter and blocks saving an empty prompt', async () => {
+      const wrapper = await mountView()
+
+      await wrapper.get('#bot-prompt').setValue('   ')
+
+      expect(wrapper.get('[data-test="prompt-counter"]').text()).toBe('3/10000')
+      expect(wrapper.get('[data-test="save-bot"]').attributes('disabled')).toBeDefined()
+    })
+
+    it('shows the server validation message', async () => {
+      settingsApi.updateSettings.mockRejectedValueOnce(
+        apiError(400, {
+          code: 'VALIDATION_ERROR',
+          message: '입력값을 확인해 주세요.',
+          details: { system_prompt: ['시스템 프롬프트를 입력해 주세요.'] },
+        }),
+      )
+      const wrapper = await mountView()
+
+      await wrapper.get('[data-test="bot-card"] form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.get('#bot-prompt').classes()).toContain('is-invalid')
     })
   })
 

@@ -150,7 +150,9 @@ def answer_stream(session, question):
         assistant.retrieved_chunk_ids = [c.pk for c in chunks]
         messages = history_messages(session, user_message.pk, setting.history_messages)
         messages.append({"role": "user", "content": build_user_content(question, chunks)})
-        system = build_system_prompt(setting.bot_name, setting.extra_instructions)
+        system = build_system_prompt(
+            setting.system_prompt, setting.bot_name, setting.extra_instructions
+        )
 
         replies = llm.stream_reply(
             provider.provider,

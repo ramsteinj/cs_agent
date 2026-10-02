@@ -4,8 +4,15 @@ from django.conf import settings
 from rest_framework import serializers
 
 import llm
+from chat.prompts import DEFAULT_SYSTEM_PROMPT
 
-from .models import EXTRA_INSTRUCTIONS_MAX_LENGTH, RAG_LIMITS, LLMProviderConfig, SystemSetting
+from .models import (
+    EXTRA_INSTRUCTIONS_MAX_LENGTH,
+    RAG_LIMITS,
+    SYSTEM_PROMPT_MAX_LENGTH,
+    LLMProviderConfig,
+    SystemSetting,
+)
 
 
 class ProviderSerializer(serializers.ModelSerializer):
@@ -58,6 +65,10 @@ class SystemSettingSerializer(serializers.ModelSerializer):
     providers = serializers.SerializerMethodField()
     bot_name = serializers.CharField(max_length=100, required=False)
     welcome_message = serializers.CharField(max_length=1000, required=False)
+    system_prompt = serializers.CharField(
+        max_length=SYSTEM_PROMPT_MAX_LENGTH, required=False, trim_whitespace=False
+    )
+    default_system_prompt = serializers.SerializerMethodField()
     extra_instructions = serializers.CharField(
         max_length=EXTRA_INSTRUCTIONS_MAX_LENGTH, allow_blank=True, required=False
     )
@@ -70,8 +81,18 @@ class SystemSettingSerializer(serializers.ModelSerializer):
             "providers",
             "bot_name",
             "welcome_message",
+            "system_prompt",
+            "default_system_prompt",
             "extra_instructions",
         ]
+
+    def get_default_system_prompt(self, obj):
+        return DEFAULT_SYSTEM_PROMPT
+
+    def validate_system_prompt(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("시스템 프롬프트를 입력해 주세요.")
+        return value.strip()
 
     def get_chatbot_enabled(self, obj):
         return obj.chatbot_enabled

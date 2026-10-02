@@ -155,7 +155,10 @@ LLM 호출은 `backend/llm/` 패키지에서만 한다. 공급자마다 같은 �
   ```
   (DB에는 원래 질문만 저장하고, 과거 턴은 context 없이 질문/답변만 보낸다.)
 
-### 4.3 시스템 프롬프트 (`chat/prompts.py`)
+### 4.3 시스템 프롬프트 (`SystemSetting.system_prompt`, 기본값 `chat/prompts.py`)
+- 관리자 화면(시스템 설정 → 챗봇 설정)에서 수정한다. 아래는 **기본값**이며 `chat.prompts.DEFAULT_SYSTEM_PROMPT`에 있다.
+- `{bot_name}`은 단순 문자열 치환한다 (`str.format`을 쓰지 않으므로 다른 `{ }`가 있어도 오류 없음).
+- 그 뒤에 추가 지시사항이 있으면 "운영자 추가 지시:"로 덧붙인다.
 ```
 당신은 "{bot_name}"이며, 회사와 제품에 대한 고객 문의에 답하는 고객지원 상담원입니다.
 

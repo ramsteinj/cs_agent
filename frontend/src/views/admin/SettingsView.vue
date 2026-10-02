@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getErrorMessage, getFieldErrors } from '@/api/client'
 import * as knowledgeApi from '@/api/knowledge'
@@ -14,6 +14,7 @@ import { useToastStore } from '@/stores/toast'
 
 // Cards: LLM, chatbot settings, RAG settings, knowledge index, password (specs/06 §5.5).
 const EXTRA_MAX = 2000
+const PROMPT_MAX = 10000
 
 const auth = useAuthStore()
 const chat = useChatStore()
@@ -26,6 +27,7 @@ const loadError = ref('')
 const botForm = reactive({
   bot_name: '',
   welcome_message: '',
+  system_prompt: '',
   extra_instructions: '',
 })
 const botErrors = ref({})
@@ -47,8 +49,17 @@ function applySettings(data) {
   Object.assign(botForm, {
     bot_name: data.bot_name,
     welcome_message: data.welcome_message,
+    system_prompt: data.system_prompt,
     extra_instructions: data.extra_instructions,
   })
+}
+
+const promptIsDefault = computed(
+  () => settings.value && botForm.system_prompt === settings.value.default_system_prompt,
+)
+
+function resetSystemPrompt() {
+  botForm.system_prompt = settings.value.default_system_prompt // saved with "저장"
 }
 
 async function loadStats() {
@@ -167,6 +178,42 @@ async function changePassword() {
             <div class="invalid-feedback">{{ botErrors.welcome_message }}</div>
           </div>
           <div class="mb-3">
+            <div class="d-flex align-items-end mb-2">
+              <label for="bot-prompt" class="form-label mb-0">시스템 프롬프트 *</label>
+              <button
+                type="button"
+                class="btn btn-link btn-sm ms-auto p-0"
+                :disabled="promptIsDefault"
+                data-test="reset-prompt"
+                @click="resetSystemPrompt"
+              >
+                기본값으로 되돌리기
+              </button>
+            </div>
+            <textarea
+              id="bot-prompt"
+              v-model="botForm.system_prompt"
+              class="form-control font-monospace small"
+              rows="12"
+              :maxlength="PROMPT_MAX"
+              :class="{ 'is-invalid': botErrors.system_prompt }"
+              aria-describedby="bot-prompt-help"
+            ></textarea>
+            <div class="invalid-feedback">{{ botErrors.system_prompt }}</div>
+            <div id="bot-prompt-help" class="form-text">
+              <div class="d-flex justify-content-between">
+                <span
+                  ><code>{bot_name}</code>은 챗봇 이름으로 바뀝니다. 다음 질문부터 적용됩니다.</span
+                >
+                <span data-test="prompt-counter">
+                  {{ botForm.system_prompt.length }}/{{ PROMPT_MAX }}
+                </span>
+              </div>
+              문서에 없는 내용을 지어내지 않도록 하는 규칙과 문서 속 지시문을 따르지 않도록 하는
+              규칙은 지우지 않는 것을 권장합니다.
+            </div>
+          </div>
+          <div class="mb-3">
             <label for="bot-extra" class="form-label">추가 지시사항</label>
             <textarea
               id="bot-extra"
@@ -187,7 +234,11 @@ async function changePassword() {
           </div>
           <LoadingButton
             :loading="savingBot"
-            :disabled="!botForm.bot_name.trim() || !botForm.welcome_message.trim()"
+            :disabled="
+              !botForm.bot_name.trim() ||
+              !botForm.welcome_message.trim() ||
+              !botForm.system_prompt.trim()
+            "
             data-test="save-bot"
           >
             저장

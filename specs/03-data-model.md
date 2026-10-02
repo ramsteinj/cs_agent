@@ -131,7 +131,8 @@ LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호
 | llm_provider | CharField(choices: `anthropic`, `openai`, `gemini`) | `anthropic` | 챗봇이 사용할 LLM (Claude / ChatGPT / Gemini) |
 | bot_name | CharField(100) | `고객지원 챗봇` | |
 | welcome_message | TextField | `안녕하세요! 회사와 제품에 대해 궁금한 점을 물어보세요.` | |
-| extra_instructions | TextField(max 2000, blank) | "" | |
+| system_prompt | TextField(max 10000) | specs/05 §4.3 기본 문구 (`chat.prompts.default_system_prompt`) | LLM 시스템 프롬프트. `{bot_name}` 치환 |
+| extra_instructions | TextField(max 2000, blank) | "" | 시스템 프롬프트 뒤에 "운영자 추가 지시"로 덧붙임 |
 | embedding_model | CharField(200) | `intfloat/multilingual-e5-small` | RAG: 임베딩 모델 (EMBEDDING_DIM 차원이어야 함) |
 | chunk_max_chars | PositiveIntegerField | 500 | RAG: 청크 최대 길이 (100~4000) |
 | chunk_overlap_chars | PositiveIntegerField | 100 | RAG: 청크 겹침 (0 이상, chunk_max_chars 미만) |
