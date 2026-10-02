@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework.authtoken",
     "common",
     "accounts",
     "knowledge",
@@ -90,6 +91,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
     # Admin-only by default; public endpoints opt in with AllowAny (specs/07-security.md).
     "DEFAULT_PERMISSION_CLASSES": ["common.permissions.IsAdminRole"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
@@ -97,4 +99,22 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "common.pagination.StandardPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "common.exceptions.api_exception_handler",
+    "DEFAULT_THROTTLE_RATES": {"login": "10/min"},
+}
+
+# Login lockout policy (specs/07-security.md §2)
+LOGIN_MAX_FAILED_ATTEMPTS = 5
+LOGIN_LOCK_MINUTES = 5
+
+# Default admin created when no ADMIN user exists (specs/01 F-A2)
+DEFAULT_ADMIN_USERNAME = "admin"
+DEFAULT_ADMIN_PASSWORD = "admin1234!"
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "accounts": {"handlers": ["console"], "level": "INFO"},
+    },
 }

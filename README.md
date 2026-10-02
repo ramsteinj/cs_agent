@@ -37,7 +37,7 @@ PostgreSQL 18 + pgvector
 | --- | --- | --- |
 | 0 | 요구 사항 정의 (`CLAUDE.md`, `specs/`) | ✅ 완료 |
 | 1 | 기반 구성 (DB, Django, Vue, User 모델) | ✅ 완료 |
-| 2 | 계정 (로그인, 기본 관리자) | ⏳ 예정 |
+| 2 | 계정 (로그인, 기본 관리자, 비밀번호 변경) | ✅ 완료 |
 | 3 | 시스템 설정 (API Key) | ⏳ 예정 |
 | 4 | 지식 관리 (회사/제품 CRUD, 임베딩) | ⏳ 예정 |
 | 5 | 챗봇 (RAG + Claude 스트리밍) | ⏳ 예정 |
@@ -81,7 +81,14 @@ npm install
 npm run dev                         # /api 요청은 Django(8000)로 프록시
 ```
 
-브라우저에서 http://localhost:5173 을 열면 "서버 연결: 정상"이 표시됩니다. 이 화면은 Phase 1 연결 확인용이며, 이후 Phase에서 채팅 화면으로 바뀝니다.
+브라우저에서 http://localhost:5173 을 열면 "서버 연결: 정상"이 표시됩니다(채팅 화면은 Phase 3/5에서 구현).
+
+### 관리자 로그인
+
+- `migrate` 직후 관리자 계정이 없으면 기본 관리자(`admin` / `admin1234!`)가 자동 생성됩니다. 수동 실행: `python manage.py ensure_default_admin`
+- 화면 상단 우측 **관리자 로그인** → 로그인 후 사용자 메뉴에서 **관리자 페이지**로 이동합니다.
+- 기본 비밀번호 사용 중에는 경고 배너가 표시됩니다. **시스템 설정 → 비밀번호 변경**에서 바꿔 주세요.
+- 같은 아이디로 5회 연속 실패하면 5분간 로그인이 차단되며, 로그인 요청은 IP당 분당 10회로 제한됩니다.
 
 ### 테스트 및 린트
 
@@ -98,7 +105,7 @@ cs_agent/
 ├── backend/             # Django + DRF
 │   ├── config/          # settings, urls
 │   ├── common/          # 공통 에러 형식, 권한(IsAdminRole), 페이지네이션, health API
-│   ├── accounts/        # User(AbstractUser + role)
+│   ├── accounts/        # User(AbstractUser + role), 로그인/로그아웃/비밀번호 변경, 기본 관리자 생성
 │   ├── knowledge/       # (Phase 4) 회사·제품, pgvector
 │   ├── chat/            # (Phase 3, 5) 챗봇
 │   └── settings_app/    # (Phase 3) API Key 등 시스템 설정

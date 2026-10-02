@@ -89,7 +89,7 @@ frontend/
     ├── main.js              # bootstrap css/js import
     ├── App.vue              # 상단 네비게이션(우측 로그인)
     ├── router/index.js
-    ├── stores/              # auth.js, chat.js
+    ├── stores/              # auth.js, chat.js, toast.js(알림)
     ├── api/                 # client.js(axios), auth.js, knowledge.js, chat.js, settings.js
     ├── views/               # ChatView, admin/*View
     └── components/          # LoginModal, ChatMessage, ChatInput, ConfirmDialog ...
