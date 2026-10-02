@@ -92,7 +92,8 @@ frontend/
     ├── stores/              # auth.js, chat.js, toast.js(알림)
     ├── api/                 # client.js(axios), auth.js, knowledge.js, chat.js, settings.js
     ├── views/               # ChatView, admin/*View
-    └── components/          # LoginModal, ChatMessage, ChatInput, ConfirmDialog ...
+    ├── components/          # LoginModal, ChatMessage, ChatInput, ConfirmDialog ...
+    └── composables/         # useUnsavedGuard (폼 이탈 확인)
 ```
 
 ## 4. 주요 설계 결정

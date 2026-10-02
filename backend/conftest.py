@@ -11,6 +11,12 @@ def _clear_cache():
     cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _fake_embeddings(settings):
+    # Deterministic hashing vectors; no model download in tests (specs/08).
+    settings.EMBEDDING_BACKEND = "fake"
+
+
 @pytest.fixture
 def api_client():
     return APIClient()

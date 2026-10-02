@@ -1,12 +1,19 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const route = useRoute()
 
-// Company / product menus are added in Phase 4.
-const menus = [{ to: '/admin/settings', label: '시스템 설정' }]
+const menus = [
+  { to: '/admin/companies', label: '회사 관리' },
+  { to: '/admin/products', label: '제품 관리' },
+  { to: '/admin/settings', label: '시스템 설정' },
+]
+
+// Also highlight the menu on its sub pages (e.g. /admin/companies/new).
+const isActive = (menu) => route.path.startsWith(menu.to)
 </script>
 
 <template>
@@ -23,7 +30,8 @@ const menus = [{ to: '/admin/settings', label: '시스템 설정' }]
             :key="menu.to"
             :to="menu.to"
             class="list-group-item list-group-item-action"
-            active-class="active"
+            :class="{ active: isActive(menu) }"
+            :aria-current="isActive(menu) ? 'page' : undefined"
           >
             {{ menu.label }}
           </RouterLink>

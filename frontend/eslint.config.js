@@ -13,6 +13,10 @@ export default [
       sourceType: 'module',
       globals: { ...globals.browser, ...globals.node },
     },
+    rules: {
+      // Component names from specs/06; none collide with HTML elements.
+      'vue/multi-word-component-names': ['error', { ignores: ['Pagination'] }],
+    },
   },
   prettier,
 ]

@@ -42,7 +42,7 @@ describe('admin route guard', () => {
 
     await router.push('/admin')
 
-    expect(router.currentRoute.value.path).toBe('/admin/settings')
+    expect(router.currentRoute.value.path).toBe('/admin/companies')
   })
 
   it('does not guard the public chat page', async () => {

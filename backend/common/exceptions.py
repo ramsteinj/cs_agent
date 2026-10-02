@@ -38,6 +38,19 @@ _DEFAULTS = [
 ]
 
 
+def _flatten_codes(codes):
+    if isinstance(codes, dict):
+        return [c for value in codes.values() for c in _flatten_codes(value)]
+    if isinstance(codes, list):
+        return [c for value in codes for c in _flatten_codes(value)]
+    return [codes]
+
+
+def _only_unique_errors(exc):
+    codes = _flatten_codes(exc.get_codes())
+    return bool(codes) and all(code == "unique" for code in codes)
+
+
 def _error_body(code, message, details=None):
     error = {"code": code, "message": message}
     if details:
@@ -67,6 +80,10 @@ def api_exception_handler(exc, context):
 
     if isinstance(exc, exceptions.ValidationError):
         details = exc.detail if isinstance(exc.detail, dict) else {"non_field_errors": exc.detail}
+        if _only_unique_errors(exc):
+            # Duplicates are 409 CONFLICT, still with field details for forms (specs/04).
+            code, message = "CONFLICT", "이미 등록된 항목입니다."
+            response.status_code = status.HTTP_409_CONFLICT
 
     response.data = _error_body(code, message, details)
     return response

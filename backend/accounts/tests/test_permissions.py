@@ -11,6 +11,18 @@ ADMIN_ENDPOINTS = [
     ("patch", "/api/admin/settings"),
     ("put", "/api/admin/settings/api-key"),
     ("delete", "/api/admin/settings/api-key"),
+    ("get", "/api/admin/companies"),
+    ("post", "/api/admin/companies"),
+    ("get", "/api/admin/companies/1"),
+    ("put", "/api/admin/companies/1"),
+    ("delete", "/api/admin/companies/1"),
+    ("get", "/api/admin/products"),
+    ("post", "/api/admin/products"),
+    ("get", "/api/admin/products/categories"),
+    ("patch", "/api/admin/products/1"),
+    ("delete", "/api/admin/products/1"),
+    ("post", "/api/admin/knowledge/reindex"),
+    ("get", "/api/admin/knowledge/stats"),
 ]
 
 

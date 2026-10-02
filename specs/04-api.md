@@ -31,6 +31,7 @@ DRF `EXCEPTION_HANDLER`를 커스텀(`common.exceptions.api_exception_handler`)�
 | 429 | `RATE_LIMITED` | 요청 제한 |
 | 502 | `LLM_ERROR` | Claude API 오류 |
 | 503 | `CHATBOT_DISABLED` | API Key 미등록 |
+| 503 | `EMBEDDING_ERROR` | 임베딩 생성 실패 (저장 내용은 롤백됨) |
 
 ---
 
@@ -103,7 +104,7 @@ Product 응답 예:
 }
 ```
 
-페이지네이션 응답 형식 (DRF PageNumberPagination, page_size=20):
+페이지네이션 응답 형식 (DRF PageNumberPagination, page_size=20, `?page_size=` 최대 100 — 관리자 드롭다운용):
 ```json
 { "count": 42, "next": "...", "previous": null, "results": [ ... ] }
 ```

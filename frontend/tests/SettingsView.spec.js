@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as authApi from '@/api/auth'
 import * as chatApi from '@/api/chat'
+import * as knowledgeApi from '@/api/knowledge'
 import * as settingsApi from '@/api/settings'
 import SettingsView from '@/views/admin/SettingsView.vue'
 
@@ -20,6 +21,7 @@ vi.mock('@/api/settings', () => ({
   deleteApiKey: vi.fn(),
 }))
 vi.mock('@/api/chat', () => ({ fetchStatus: vi.fn() }))
+vi.mock('@/api/knowledge', () => ({ getStats: vi.fn(), reindex: vi.fn() }))
 
 const BASE = {
   api_key_configured: false,
@@ -38,6 +40,14 @@ const CONFIGURED = {
   api_key_updated_at: '2026-10-02T09:00:00Z',
 }
 
+const STATS = {
+  companies: 1,
+  products: 3,
+  chunks: 4,
+  embedding_model: 'intfloat/multilingual-e5-small',
+  embedding_dim: 384,
+}
+
 function apiError(status, error) {
   return { response: { status, data: { error } } }
 }
@@ -54,6 +64,7 @@ describe('SettingsView', () => {
     setActivePinia(createPinia())
     vi.resetAllMocks() // also drops queued *Once values left by a previous test
     chatApi.fetchStatus.mockResolvedValue({ enabled: true, bot_name: 'x', welcome_message: 'y' })
+    knowledgeApi.getStats.mockResolvedValue(STATS)
     document.body.innerHTML = ''
   })
 
@@ -149,6 +160,29 @@ describe('SettingsView', () => {
       await wrapper.get('#bot-extra').setValue('가나다')
 
       expect(wrapper.get('[data-test="extra-counter"]').text()).toBe('3/2000')
+    })
+  })
+
+  describe('knowledge index card', () => {
+    it('shows stats', async () => {
+      const wrapper = await mountView()
+
+      const text = wrapper.get('[data-test="index-stats"]').text()
+      expect(text).toContain('1 / 3')
+      expect(text).toContain('intfloat/multilingual-e5-small (384차원)')
+    })
+
+    it('reindexes after confirmation and refreshes stats', async () => {
+      knowledgeApi.reindex.mockResolvedValueOnce({ chunks: 4 })
+      const wrapper = await mountView()
+
+      await wrapper.get('[data-test="reindex"]').trigger('click')
+      expect(knowledgeApi.reindex).not.toHaveBeenCalled()
+      await wrapper.get('[data-test="confirm"]').trigger('click')
+      await flushPromises()
+
+      expect(knowledgeApi.reindex).toHaveBeenCalledTimes(1)
+      expect(knowledgeApi.getStats).toHaveBeenCalledTimes(2)
     })
   })
 

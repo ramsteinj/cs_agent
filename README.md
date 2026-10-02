@@ -39,7 +39,7 @@ PostgreSQL 18 + pgvector
 | 1 | 기반 구성 (DB, Django, Vue, User 모델) | ✅ 완료 |
 | 2 | 계정 (로그인, 기본 관리자, 비밀번호 변경) | ✅ 완료 |
 | 3 | 시스템 설정 (API Key 암호화 저장, 챗봇 설정, 채팅 활성 상태) | ✅ 완료 |
-| 4 | 지식 관리 (회사/제품 CRUD, 임베딩) | ⏳ 예정 |
+| 4 | 지식 관리 (회사/제품 CRUD, 임베딩·pgvector 색인, 검색, 재색인) | ✅ 완료 |
 | 5 | 챗봇 (RAG + Claude 스트리밍) | ⏳ 예정 |
 | 6 | 마무리 | ⏳ 예정 |
 
@@ -67,7 +67,7 @@ psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 cd backend
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt     # CPU 전용 PyTorch 포함 (약 1.5GB)
 cp .env.example .env                # DJANGO_SECRET_KEY, DATABASE_URL, FIELD_ENCRYPTION_KEY 설정
 # FIELD_ENCRYPTION_KEY 생성 (없거나 잘못되면 서버가 시작되지 않음):
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -92,6 +92,14 @@ npm run dev                         # /api 요청은 Django(8000)로 프록시
 - 기본 비밀번호 사용 중에는 경고 배너가 표시됩니다. **시스템 설정 → 비밀번호 변경**에서 바꿔 주세요.
 - 같은 아이디로 5회 연속 실패하면 5분간 로그인이 차단되며, 로그인 요청은 IP당 분당 10회로 제한됩니다.
 
+### 회사·제품 정보 관리 (지식)
+
+- **관리자 페이지 → 회사 관리 / 제품 관리**에서 정보를 등록·수정·삭제합니다. 저장하면 내용을 청크로 나누고 임베딩을 만들어 pgvector(`KnowledgeChunk`)에 저장합니다.
+- 회사를 삭제하면 소속 제품과 청크도 함께 삭제됩니다. **판매 중**을 끈 제품은 챗봇 답변 근거에서 제외됩니다.
+- 임베딩 모델 `intfloat/multilingual-e5-small`(384차원)은 첫 사용 시 Hugging Face에서 자동으로 내려받습니다(약 470MB, `~/.cache/huggingface`).
+- **시스템 설정 → 지식 색인**에서 통계를 보고 전체 재색인을 실행할 수 있습니다.
+- 데모용 가상 데이터(회사 1개, 제품 3개): `python manage.py load_sample_knowledge` (다시 만들려면 `--reset`)
+
 ### Claude API Key 및 챗봇 설정
 
 - **관리자 페이지 → 시스템 설정 → Claude API Key**에 Anthropic API Key를 입력하면, 저장 전에 Anthropic API로 유효성을 확인합니다.
@@ -115,7 +123,7 @@ cs_agent/
 │   ├── config/          # settings, urls
 │   ├── common/          # 공통 에러 형식, 권한(IsAdminRole), 페이지네이션, health API
 │   ├── accounts/        # User(AbstractUser + role), 로그인/로그아웃/비밀번호 변경, 기본 관리자 생성
-│   ├── knowledge/       # (Phase 4) 회사·제품, pgvector
+│   ├── knowledge/       # 회사·제품 CRUD, 청킹·임베딩·pgvector 색인, 벡터 검색
 │   ├── chat/            # 챗봇 상태 API (메시지/RAG는 Phase 5)
 │   └── settings_app/    # SystemSetting: 암호화된 API Key, 모델·챗봇 설정
 └── frontend/            # Vue 3 + Vite + Bootstrap 5.0 SPA

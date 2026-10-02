@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 
 import { getErrorMessage, getFieldErrors } from '@/api/client'
+import * as knowledgeApi from '@/api/knowledge'
 import * as settingsApi from '@/api/settings'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import LoadingButton from '@/components/LoadingButton.vue'
@@ -9,7 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useToastStore } from '@/stores/toast'
 
-// Cards: API Key, chatbot settings, password. The knowledge index card follows in Phase 4.
+// Cards: API Key, chatbot settings, knowledge index, password (specs/06 §5.5).
 const EXTRA_MAX = 2000
 
 const auth = useAuthStore()
@@ -36,6 +37,11 @@ const botForm = reactive({
 const botErrors = ref({})
 const savingBot = ref(false)
 
+// --- Knowledge index -----------------------------------------------------
+const stats = ref(null)
+const reindexing = ref(false)
+const confirmReindex = ref(false)
+
 // --- Password ------------------------------------------------------------
 const pwForm = reactive({ current: '', next: '', confirm: '' })
 const pwErrors = ref({})
@@ -56,13 +62,36 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleString('ko-KR') : ''
 }
 
+async function loadStats() {
+  try {
+    stats.value = await knowledgeApi.getStats()
+  } catch {
+    stats.value = null
+  }
+}
+
 onMounted(async () => {
+  loadStats()
   try {
     applySettings(await settingsApi.getSettings())
   } catch (err) {
     loadError.value = getErrorMessage(err)
   }
 })
+
+async function runReindex() {
+  confirmReindex.value = false
+  reindexing.value = true
+  try {
+    const { chunks } = await knowledgeApi.reindex()
+    toast.show(`재색인이 완료되었습니다. (청크 ${chunks}개)`)
+    loadStats()
+  } catch (err) {
+    toast.show(getErrorMessage(err), 'danger')
+  } finally {
+    reindexing.value = false
+  }
+}
 
 async function saveApiKey() {
   apiKeyError.value = ''
@@ -279,7 +308,37 @@ async function changePassword() {
       </div>
     </template>
 
-    <!-- 3. Password (available even if settings failed to load) -->
+    <!-- 3. Knowledge index -->
+    <div class="card mb-4" data-test="index-card">
+      <div class="card-header">지식 색인</div>
+      <div class="card-body">
+        <dl v-if="stats" class="row small mb-3" data-test="index-stats">
+          <dt class="col-5">회사 / 제품</dt>
+          <dd class="col-7">{{ stats.companies }} / {{ stats.products }}</dd>
+          <dt class="col-5">청크</dt>
+          <dd class="col-7">{{ stats.chunks }}</dd>
+          <dt class="col-5">임베딩 모델</dt>
+          <dd class="col-7 text-break">
+            {{ stats.embedding_model }} ({{ stats.embedding_dim }}차원)
+          </dd>
+        </dl>
+        <p class="small text-muted">
+          모든 회사·제품 정보의 청크와 임베딩을 다시 생성합니다. 임베딩 모델을 바꾼 뒤 사용하세요.
+        </p>
+        <LoadingButton
+          type="button"
+          variant="outline-primary"
+          :loading="reindexing"
+          loading-text="재색인 중..."
+          data-test="reindex"
+          @click="confirmReindex = true"
+        >
+          전체 재색인
+        </LoadingButton>
+      </div>
+    </div>
+
+    <!-- 4. Password (available even if settings failed to load) -->
     <div class="card" data-test="password-card">
       <div class="card-header">비밀번호 변경</div>
       <form class="card-body" novalidate @submit.prevent="changePassword">
@@ -335,6 +394,15 @@ async function changePassword() {
       </form>
     </div>
 
+    <ConfirmDialog
+      :show="confirmReindex"
+      title="전체 재색인"
+      message="모든 회사·제품 정보를 다시 색인합니다. 데이터 양에 따라 시간이 걸릴 수 있습니다. 진행하시겠습니까?"
+      confirm-text="재색인"
+      variant="primary"
+      @confirm="runReindex"
+      @cancel="confirmReindex = false"
+    />
     <ConfirmDialog
       :show="confirmDelete"
       title="API Key 삭제"

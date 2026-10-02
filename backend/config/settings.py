@@ -106,6 +106,15 @@ REST_FRAMEWORK = {
 # Validated at startup by settings_app (missing/invalid -> ImproperlyConfigured).
 FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default="")
 
+# RAG / embeddings (specs/05-rag-pipeline.md). EMBEDDING_DIM must match the migration.
+EMBEDDING_BACKEND = env("EMBEDDING_BACKEND", default="sentence_transformers")  # or "fake"
+EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="intfloat/multilingual-e5-small")
+EMBEDDING_DIM = env.int("EMBEDDING_DIM", default=384)
+RAG_TOP_K = env.int("RAG_TOP_K", default=5)
+RAG_MAX_DISTANCE = env.float("RAG_MAX_DISTANCE", default=0.6)
+CHUNK_MAX_CHARS = 500
+CHUNK_OVERLAP_CHARS = 100
+
 # Login lockout policy (specs/07-security.md §2)
 LOGIN_MAX_FAILED_ATTEMPTS = 5
 LOGIN_LOCK_MINUTES = 5
@@ -121,5 +130,6 @@ LOGGING = {
     "loggers": {
         "accounts": {"handlers": ["console"], "level": "INFO"},
         "settings_app": {"handlers": ["console"], "level": "INFO"},
+        "knowledge": {"handlers": ["console"], "level": "INFO"},
     },
 }
