@@ -140,6 +140,7 @@ cd frontend && npm run test && npm run lint && npm run build
 - 배포 전 점검: `DJANGO_DEBUG=False python manage.py check --deploy`
 - Nginx에서 `/api/chat/messages`는 SSE이므로 응답 버퍼링을 끕니다(서버가 `X-Accel-Buffering: no`를 보냄). 프론트엔드는 `npm run build`의 `dist/`를 정적 서빙하고, 모든 경로를 `index.html`로 돌려 SPA 라우팅을 지원합니다.
 - **감사 로그**: 관리자 로그인 성공/실패, 로그아웃, 비밀번호 변경, API Key 등록/삭제, 설정 변경, 회사·제품 삭제, 전체 재색인이 `audit` 로거로 `... AUDIT event=... user=...` 형식으로 기록됩니다. 비밀번호와 API Key는 기록하지 않습니다.
+- **Claude 호출 실패 로그**: `Claude API call failed (model=...): status=400 type=invalid_request_error request_id=req_...` 형식으로 남습니다. 요청 ID로 Anthropic Console 로그를 찾거나 지원팀에 문의할 수 있습니다. 예를 들어 크레딧 부족은 `status=400 type=invalid_request_error`로 나타납니다.
 - **대화 보관 정책**: 마지막 활동 후 30일이 지난 대화를 지우려면 주기적으로 실행합니다. 예: `0 3 * * * cd /path/backend && .venv/bin/python manage.py cleanup_chat_sessions` (`--days N`, `--dry-run` 지원)
 
 ## 남은 작업

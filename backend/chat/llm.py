@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 import anthropic
 
+from common.anthropic_errors import describe_api_error
+
 logger = logging.getLogger(__name__)
 
 MAX_TOKENS = 4096
@@ -62,21 +64,11 @@ def stream_reply(api_key, model, system, messages):
             for text in stream.text_stream:
                 yield text
             final = stream.get_final_message()
-    except anthropic.AuthenticationError:
-        logger.warning("Claude API rejected the configured API Key")
-        raise LLMError("authentication failed") from None
-    except anthropic.PermissionDeniedError:
-        logger.warning("Claude API permission denied for model %s", model)
-        raise LLMError("permission denied") from None
-    except anthropic.RateLimitError:
-        logger.warning("Claude API rate limited")
-        raise LLMError("rate limited") from None
-    except anthropic.APIStatusError as exc:
-        logger.warning("Claude API error status=%s", exc.status_code)
-        raise LLMError(f"api status {exc.status_code}") from None
-    except anthropic.APIConnectionError as exc:
-        logger.warning("Claude API connection error: %s", type(exc).__name__)
-        raise LLMError("connection error") from None
+    except anthropic.APIError as exc:
+        # e.g. "status=400 type=invalid_request_error request_id=req_..." (no key, no raw text)
+        description = describe_api_error(exc)
+        logger.warning("Claude API call failed (model=%s): %s", model, description)
+        raise LLMError(description) from None
 
     text = "".join(block.text for block in final.content if block.type == "text")
     refused = final.stop_reason == "refusal"

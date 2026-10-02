@@ -155,3 +155,16 @@ class TestApiKey:
         admin_client.put(KEY_URL, {"api_key": KEY}, format="json")
 
         assert KEY not in caplog.text
+
+
+@pytest.mark.django_db
+def test_validation_failure_log_has_request_id(admin_client, anthropic_client, caplog):
+    response = httpx2.Response(529, request=_REQUEST, headers={"request-id": "req_011overload"})
+    anthropic_client.return_value.models.list.side_effect = anthropic.APIStatusError(
+        "overloaded", response=response, body={"error": {"type": "overloaded_error"}}
+    )
+
+    admin_client.put(KEY_URL, {"api_key": KEY}, format="json")
+
+    assert "status=529 type=overloaded_error request_id=req_011overload" in caplog.text
+    assert KEY not in caplog.text

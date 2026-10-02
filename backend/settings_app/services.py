@@ -3,6 +3,7 @@ import logging
 import anthropic
 from rest_framework import status
 
+from common.anthropic_errors import describe_api_error
 from common.exceptions import ApiError
 
 logger = logging.getLogger(__name__)
@@ -20,12 +21,13 @@ def validate_api_key(api_key: str):
     client = anthropic.Anthropic(api_key=api_key, max_retries=1, timeout=VALIDATION_TIMEOUT_SECONDS)
     try:
         client.models.list(limit=1)
-    except (anthropic.AuthenticationError, anthropic.PermissionDeniedError):
+    except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
+        logger.info("API Key rejected by Anthropic: %s", describe_api_error(exc))
         raise ApiError(
             "INVALID_API_KEY", "유효하지 않은 API Key입니다.", status.HTTP_400_BAD_REQUEST
         ) from None
     except anthropic.APIError as exc:
-        logger.warning("API Key validation failed: %s", type(exc).__name__)
+        logger.warning("API Key validation failed: %s", describe_api_error(exc))
         raise ApiError(
             "LLM_ERROR",
             "Anthropic API에 연결할 수 없어 API Key를 확인하지 못했습니다. "

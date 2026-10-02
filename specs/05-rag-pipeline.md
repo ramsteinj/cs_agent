@@ -83,6 +83,7 @@
   | timeout | 60초, `max_retries=2` |
 - 거절 대비: `stop_reason == "refusal"` 이면 "죄송합니다. 해당 질문에는 답변드리기 어렵습니다." 를 반환. Claude API 사용 시 서버측 fallback(`betas=["server-side-fallback-2026-07-01"]`, `fallbacks="default"`)을 `client.beta.messages.stream` 으로 활성화한다.
 - 오류 처리: SDK 타입 예외를 구체적인 것부터 처리 — `AuthenticationError`(키 무효 → 로그에 경고, 고객에게는 일반 오류), `RateLimitError`, `APIStatusError`, `APIConnectionError`. 문자열 매칭 금지.
+- 실패 로그: `common.anthropic_errors.describe_api_error()`로 HTTP 상태, 오류 종류(`exc.type`, 예: `invalid_request_error`), 요청 ID(`exc.request_id`)를 남긴다. 예: `Claude API call failed (model=claude-opus-5-5): status=400 type=invalid_request_error request_id=req_...`. 원본 오류 메시지와 API Key는 남기지 않는다. 연결 오류는 `error=APIConnectionError`처럼 예외 이름만 남긴다. API Key 검증 호출(settings_app)도 같은 형식을 쓴다.
 - assistant prefill(마지막 턴을 assistant로 두기) 사용 금지.
 
 ### 4.2 메시지 구성

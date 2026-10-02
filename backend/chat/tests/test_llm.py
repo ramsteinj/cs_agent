@@ -120,3 +120,33 @@ def test_api_key_is_not_logged(client_cls, caplog):
         _run(llm.stream_reply("sk-ant-secret-key", "claude-opus-5-5", "sys", []))
 
     assert "sk-ant-secret-key" not in caplog.text
+
+
+def test_failure_log_has_error_type_and_request_id(client_cls, caplog):
+    response = httpx2.Response(400, request=_REQUEST, headers={"request-id": "req_011credit"})
+    client_cls.return_value.beta.messages.stream.side_effect = anthropic.BadRequestError(
+        "Your credit balance is too low",
+        response=response,
+        body={"type": "error", "error": {"type": "invalid_request_error", "message": "low"}},
+    )
+
+    with pytest.raises(llm.LLMError):
+        _run(llm.stream_reply("sk-ant-secret-key", "claude-opus-5-5", "sys", []))
+
+    assert (
+        "Claude API call failed (model=claude-opus-5-5): "
+        "status=400 type=invalid_request_error request_id=req_011credit"
+    ) in caplog.text
+    assert "sk-ant-secret-key" not in caplog.text
+    assert "credit balance" not in caplog.text
+
+
+def test_connection_failure_log(client_cls, caplog):
+    client_cls.return_value.beta.messages.stream.side_effect = anthropic.APIConnectionError(
+        request=_REQUEST
+    )
+
+    with pytest.raises(llm.LLMError):
+        _run(llm.stream_reply("key", "claude-opus-5-5", "sys", []))
+
+    assert "error=APIConnectionError" in caplog.text
