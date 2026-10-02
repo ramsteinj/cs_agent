@@ -57,7 +57,10 @@
 - 봇 응답 스트리밍 중 타이핑 표시, 답변 아래 출처(`참고: ...`) 작은 글씨.
 - 입력: `textarea`(자동 높이, 최대 5줄) + 전송 버튼. Enter 전송, Shift+Enter 줄바꿈, IME 조합 중(`isComposing`) Enter는 무시(한국어 입력 필수 처리). 글자 수 표시 `n/1000`.
 - **비활성(`enabled=false`)**: textarea, 전송 버튼 `disabled`, placeholder "현재 상담 서비스를 준비 중입니다.", 메시지 영역에 `alert-secondary` 안내.
-- 응답 렌더링: 텍스트로 출력하고 줄바꿈은 CSS `white-space: pre-wrap`. 마크다운 지원 시 `marked` + `DOMPurify` 로 sanitize.
+- 응답 렌더링: **봇 답변은 마크다운**(`marked`, GFM, 줄바꿈 유지)을 `DOMPurify`로 sanitize한 HTML로 표시한다 (`src/utils/markdown.js`). 고객 메시지와 환영 메시지는 텍스트 그대로(`white-space: pre-wrap`).
+  - 허용 태그: p, br, strong/b, em/i, del/s, ul/ol/li, blockquote, hr, h1~h6, code, pre, table 계열, a. 속성은 href, title만.
+  - 이미지·iframe·form·style 등은 제거한다 (문서에 숨긴 지시로 외부 추적 이미지를 띄우는 것 방지).
+  - 링크는 `http(s):`, `mailto:`, `tel:`만 허용하고 `target="_blank" rel="noopener noreferrer nofollow"`.
 - 오류: 해당 봇 말풍선을 오류 스타일로 바꾸고 "다시 시도" 버튼.
 
 ### 5.2 LoginModal

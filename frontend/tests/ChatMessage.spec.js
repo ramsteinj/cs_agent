@@ -6,13 +6,24 @@ import ChatMessage from '@/components/ChatMessage.vue'
 const base = { key: 1, role: 'assistant', content: '', sources: [], status: 'ok', errorText: '' }
 
 describe('ChatMessage', () => {
-  it('renders content as text, never HTML', () => {
+  it('renders bot answers as sanitized Markdown', () => {
     const wrapper = mount(ChatMessage, {
-      props: { message: { ...base, content: '<img src=x onerror=alert(1)>' } },
+      props: { message: { ...base, content: '**14일 무료 체험**<img src=x onerror=alert(1)>' } },
     })
 
+    expect(wrapper.get('[data-test="markdown"] strong').text()).toBe('14일 무료 체험')
     expect(wrapper.find('img').exists()).toBe(false)
-    expect(wrapper.text()).toContain('<img src=x onerror=alert(1)>')
+    expect(wrapper.html()).not.toContain('onerror')
+  })
+
+  it('keeps the customer message as plain text', () => {
+    const wrapper = mount(ChatMessage, {
+      props: { message: { ...base, role: 'user', content: '**굵게** <img src=x>' } },
+    })
+
+    expect(wrapper.find('strong').exists()).toBe(false)
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.text()).toBe('**굵게** <img src=x>')
   })
 
   it('shows a typing indicator while waiting for the first delta', () => {

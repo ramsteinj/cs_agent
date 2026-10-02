@@ -1,6 +1,8 @@
 <script setup>
 import { computed } from 'vue'
 
+import { renderMarkdown } from '@/utils/markdown'
+
 const props = defineProps({
   message: { type: Object, required: true },
 })
@@ -10,6 +12,8 @@ const isUser = computed(() => props.message.role === 'user')
 const isTyping = computed(() => props.message.status === 'streaming' && !props.message.content)
 const isError = computed(() => props.message.status === 'error')
 const sourceTitles = computed(() => props.message.sources.map((s) => s.title).join(', '))
+// Bot answers are Markdown rendered to sanitized HTML; the customer's own text stays plain.
+const answerHtml = computed(() => (isUser.value ? '' : renderMarkdown(props.message.content)))
 </script>
 
 <template>
@@ -23,11 +27,17 @@ const sourceTitles = computed(() => props.message.sources.map((s) => s.title).jo
       }"
       :data-test="`message-${message.role}`"
     >
-      <!-- Plain text only: LLM output is never rendered as HTML (specs/07 §5). -->
       <span v-if="isTyping" class="typing" aria-label="답변 생성 중" data-test="typing">
         <span></span><span></span><span></span>
       </span>
-      <div v-else-if="message.content" class="content">{{ message.content }}</div>
+      <div v-else-if="message.content && isUser" class="content">{{ message.content }}</div>
+      <!-- eslint-disable-next-line vue/no-v-html -- DOMPurify-sanitized (utils/markdown.js) -->
+      <div
+        v-else-if="message.content"
+        class="markdown"
+        data-test="markdown"
+        v-html="answerHtml"
+      ></div>
 
       <div v-if="isError" class="text-danger small mt-1" data-test="message-error">
         {{ message.errorText }}
@@ -59,6 +69,63 @@ const sourceTitles = computed(() => props.message.sources.map((s) => s.title).jo
 .content {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.markdown {
+  word-break: break-word;
+}
+
+.markdown :deep(p),
+.markdown :deep(ul),
+.markdown :deep(ol),
+.markdown :deep(blockquote),
+.markdown :deep(pre),
+.markdown :deep(table) {
+  margin-bottom: 0.5rem;
+}
+
+.markdown :deep(> :last-child) {
+  margin-bottom: 0;
+}
+
+.markdown :deep(ul),
+.markdown :deep(ol) {
+  padding-left: 1.25rem;
+}
+
+.markdown :deep(h1),
+.markdown :deep(h2),
+.markdown :deep(h3),
+.markdown :deep(h4),
+.markdown :deep(h5),
+.markdown :deep(h6) {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.25rem 0;
+}
+
+.markdown :deep(pre) {
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.markdown :deep(table) {
+  font-size: 0.875rem;
+  border-collapse: collapse;
+}
+
+.markdown :deep(th),
+.markdown :deep(td) {
+  border: 1px solid #dee2e6;
+  padding: 0.25rem 0.5rem;
+}
+
+.markdown :deep(blockquote) {
+  border-left: 3px solid #ced4da;
+  padding-left: 0.5rem;
+  color: #6c757d;
 }
 
 .typing span {

@@ -92,7 +92,7 @@ npm run build
 ### Frontend (Vue 3)
 - Composition API + `<script setup>`만 사용. 상태 관리는 Pinia, 라우팅은 Vue Router, HTTP는 `src/api/` 의 axios 인스턴스 하나로 통일.
 - 스타일은 Bootstrap 5.0 클래스를 우선 사용하고, 커스텀 CSS는 컴포넌트 `<style scoped>`에 최소한으로.
-- LLM 응답은 `v-html`로 렌더링하지 않는다(XSS). 마크다운 렌더링이 필요하면 sanitize 후 사용.
+- LLM 응답 HTML은 반드시 `src/utils/markdown.js`의 `renderMarkdown()`(marked + DOMPurify 허용 목록)을 거친 것만 `v-html`로 표시한다. 그 외 `v-html` 사용 금지(XSS).
 
 ## README.md 유지 규칙
 
