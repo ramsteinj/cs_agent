@@ -28,12 +28,11 @@ psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 | `DJANGO_NUM_PROXIES` | `0` | 신뢰하는 리버스 프록시 수 (Nginx 1대 뒤면 `1`). `0`이면 `X-Forwarded-For` 무시 |
 | `DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_SECURE_HSTS_SECONDS` / `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | `True` / `31536000` / `False` | `DJANGO_DEBUG=False`일 때만 적용 |
 | `EMBEDDING_BACKEND` | `sentence_transformers` / `fake` | 테스트는 `fake` |
-| `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | |
 | `EMBEDDING_DIM` | `384` | 마이그레이션 차원과 일치해야 함 |
-| `RAG_TOP_K` | `5` | |
-| `RAG_MAX_DISTANCE` | `0.6` | |
 
-> Anthropic API Key는 환경 변수가 아니라 **관리자 화면에서 입력 → DB 저장**이 요구 사항이다. `ANTHROPIC_API_KEY` 환경 변수는 사용하지 않는다.
+> 임베딩 모델, 청크 크기, 검색 개수·거리 등 RAG 튜닝 값은 환경 변수가 아니라 DB(관리자 화면 → RAG 설정)에서 관리한다 (specs/05 §1.1).
+
+> LLM API Key(Claude / ChatGPT / Gemini)는 환경 변수가 아니라 **관리자 화면에서 입력 → DB 저장**이 요구 사항이다. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` 환경 변수는 사용하지 않는다.
 
 ### 실행 순서
 1. 로컬 PostgreSQL에 pgvector 설치 및 DB 생성 (위 "데이터베이스" 참조, 최초 1회)
@@ -51,7 +50,7 @@ psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 ### Backend (pytest + pytest-django)
 - 테스트 DB도 로컬 PostgreSQL(pgvector) 사용 (pytest-django가 `test_cs_agent` 생성) — SQLite 금지(벡터 필드 때문).
 - `EMBEDDING_BACKEND=fake` : 텍스트 해시 기반 결정적 벡터 (같은 텍스트 → 같은 벡터).
-- Claude 호출은 `chat/llm.py` 를 mock 하여 네트워크 없이 테스트. 실제 API 호출 테스트는 `@pytest.mark.live` 로 분리, 기본 실행에서 제외.
+- LLM 호출은 `backend/llm/` 공급자의 SDK 클라이언트를 mock 하여 네트워크 없이 테스트한다. 루트 conftest가 세 SDK 클라이언트 생성을 기본으로 막는다. 실제 API 호출 테스트는 `@pytest.mark.live` 로 분리, 기본 실행에서 제외.
 
 필수 테스트 목록:
 | 영역 | 테스트 |
@@ -60,7 +59,9 @@ psql postgres://cs_agent:cs_agent@localhost:5432/cs_agent -c "\dx vector"
 | 권한 | 모든 `/api/admin/*` 가 비인증 401, 비관리자 403 |
 | knowledge | CRUD 검증, 생성/수정/삭제 시 청크 동기화, 비활성 제품 청크 `is_searchable=False`, 청킹 함수 단위 테스트 |
 | retrieval | fake 임베딩으로 관련 청크가 상위에 오는지, 비활성 제외, 거리 임계값 |
-| settings | API Key 저장 시 검증 호출(mock), 암호문 저장, 마스킹, 평문 미노출, 삭제 후 챗봇 비활성 |
+| settings | 공급자별 API Key 저장 시 검증 호출(mock), 암호문 저장, 마스킹, 평문 미노출, 삭제 후 챗봇 비활성, 공급자 전환, 모델 변경·목록, RAG 설정 범위 검증과 재색인·롤백 |
+| llm | 공급자별 요청 파라미터, 스트리밍·최종 응답, 거절, 오류 → LLMError, 로그 형식, 모델 목록 필터 |
+| documents | txt(UTF-8/CP949)/docx(문단·표)/pdf 추출, 시그니처 불일치·.doc·암호화·빈 PDF·크기 초과 거부, 업로드·삭제 시 재색인 |
 | chat | status enabled/disabled, 비활성 시 503, SSE 이벤트 순서(start→delta→done), LLM 오류 시 error 이벤트, 길이 제한 400, 히스토리 10개 제한, rate limit 429 |
 
 ### Frontend (Vitest + @vue/test-utils)

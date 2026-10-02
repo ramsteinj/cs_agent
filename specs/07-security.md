@@ -12,10 +12,10 @@
 - DRF throttle: `auth/login` 에 IP당 `10/min`.
 - 클라이언트 IP: DRF `NUM_PROXIES`(환경 변수 `DJANGO_NUM_PROXIES`, 기본 0)만큼의 신뢰 프록시 홉에서만 `X-Forwarded-For`를 사용한다. 기본값(DRF의 `None`)은 클라이언트가 보낸 `X-Forwarded-For`를 그대로 믿어 IP 기반 제한을 우회할 수 있으므로 쓰지 않는다. 채팅 rate limit도 같은 규칙을 쓴다.
 
-## 3. Claude API Key 보호
-- 저장: `cryptography.fernet.Fernet` 으로 암호화하여 `SystemSetting.anthropic_api_key_encrypted` 에 저장.
+## 3. LLM API Key 보호 (Claude / ChatGPT / Gemini)
+- 저장: `cryptography.fernet.Fernet` 으로 암호화하여 공급자별 `LLMProviderConfig.api_key_encrypted` 에 저장.
 - 암호화 키: 환경 변수 `FIELD_ENCRYPTION_KEY` (Fernet 키, `Fernet.generate_key()`로 생성). 없으면 서버 시작 실패(명확한 에러 메시지). DB 백업만으로는 키를 복호화할 수 없도록 DB에 저장하지 않는다.
-- 응답: 평문 키를 어떤 API로도 반환하지 않는다. `api_key_masked` = 접두 `sk-ant-` + `...` + 끝 4자리.
+- 응답: 평문 키를 어떤 API로도 반환하지 않는다. `api_key_masked` = 공급자별 고정 접두(Claude `sk-ant-`, ChatGPT `sk-`, Gemini `AIza`) + `...` + 끝 4자리.
 - 로그: 키, Authorization 헤더, 요청 본문의 `api_key` 필드를 로그에 남기지 않는다.
 - 키 검증 요청 실패 메시지에 원본 예외 문자열(키 일부 포함 가능)을 노출하지 않는다.
 - 프론트: 입력 후 저장되면 입력 필드를 즉시 비운다.
@@ -33,6 +33,12 @@
 - `/api/` 경로의 404/500도 공통 에러 형식(JSON)으로 응답하고, 500에는 스택 트레이스를 포함하지 않는다.
 - `SECRET_KEY`, DB 비밀번호, `FIELD_ENCRYPTION_KEY` 는 `.env` 에만, `.env` 는 `.gitignore` 에 포함. `.env.example` 만 커밋.
 
-## 6. 감사 로그 (선택, v1 권장)
+## 6. 파일 업로드 (제품 문서)
+- 허용 형식만 처리: 확장자(`.txt`, `.docx`, `.pdf`)와 파일 시그니처를 모두 확인한다.
+- 파일 10MB 이하. docx는 ZIP 압축 해제 합계 50MB 이하(압축 폭탄 방지), PDF는 500쪽 이하, 암호화 PDF 거부. 추출 텍스트 200,000자 이하.
+- 원본 파일은 디스크·DB에 저장하지 않고 추출 텍스트만 저장한다. 파일명은 경로를 제거해 저장한다.
+- 추출한 텍스트는 다른 청크와 같이 `<context>` 안에서 XML 이스케이프되어 프롬프트에 들어가므로, 문서 안의 지시문은 시스템 프롬프트 규칙으로 무시된다.
+
+## 7. 감사 로그 (선택, v1 권장)
 - 관리자 로그인 성공/실패, API Key 변경/삭제, 회사·제품 삭제를 `logging` 으로 INFO 기록 (username, 시각, 대상 ID; 비밀 값 제외).
-- 구현: `common.audit.audit()` → `audit` 로거, 한 줄 `event=<이름> user=<username> key=value ...`. 값은 repr로 감싸 줄바꿈 등 로그 위조를 막는다. 추가로 로그아웃, 비밀번호 변경, 설정 변경, 전체 재색인도 기록한다.
+- 구현: `common.audit.audit()` → `audit` 로거, 한 줄 `event=<이름> user=<username> key=value ...`. 값은 repr로 감싸 줄바꿈 등 로그 위조를 막는다. 추가로 로그아웃, 비밀번호 변경, 설정 변경(LLM 공급자·모델·RAG 설정 포함), 전체 재색인, 제품 문서 업로드·삭제도 기록한다.

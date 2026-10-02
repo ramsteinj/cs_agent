@@ -12,8 +12,8 @@
  │  Django + Django REST Framework              │
  │  ├─ accounts     : 사용자/인증               │
  │  ├─ knowledge    : 회사·제품 CRUD, 임베딩     │──── sentence-transformers (로컬 임베딩)
- │  ├─ chat         : RAG 파이프라인            │──── Anthropic Claude API (HTTPS)
- │  └─ settings_app : API Key 등 시스템 설정     │
+ │  ├─ chat         : RAG 파이프라인            │──── llm/: Claude · ChatGPT · Gemini API (HTTPS)
+ │  └─ settings_app : LLM·RAG 시스템 설정        │
  └──────────┬───────────────────────────────────┘
             │ Django ORM
             v
@@ -43,7 +43,10 @@
 | | djangorestframework authtoken | 토큰 인증 (specs/07) |
 | | psycopg | 3.x (`psycopg[binary]`) |
 | | pgvector | Python 패키지 (`pgvector.django`) |
-| | anthropic | 공식 Python SDK 최신 |
+| | anthropic | Claude 공식 Python SDK |
+| | openai | ChatGPT 공식 Python SDK (Responses API) |
+| | google-genai | Gemini 공식 Python SDK |
+| | python-docx / pypdf | 제품 문서(.docx / .pdf) 텍스트 추출 |
 | | sentence-transformers | 로컬 임베딩 |
 | | cryptography | Fernet (API Key 암호화) |
 | | django-environ | 환경 변수 로딩 |
@@ -68,18 +71,21 @@ backend/
 │   ├── services.py
 │   └── management/commands/ensure_default_admin.py
 ├── knowledge/
-│   ├── models.py            # Company, Product, KnowledgeChunk
+│   ├── models.py            # Company, Product, ProductDocument, KnowledgeChunk
+│   ├── documents.py         # txt/docx/pdf 텍스트 추출
 │   ├── embeddings.py        # 임베딩 모델 로딩/인코딩 (유일한 진입점)
 │   ├── chunking.py
 │   ├── indexing.py          # 소스 → 청크 생성/삭제
 │   └── retrieval.py         # 벡터 검색
+├── llm/                     # LLM 공급자 (유일한 LLM 호출 지점, Django 앱 아님)
+│   ├── base.py              # 공통 인터페이스, FinalReply, LLMError, InvalidAPIKey
+│   ├── anthropic_provider.py / openai_provider.py / gemini_provider.py
 ├── chat/
 │   ├── models.py            # ChatSession, ChatMessage
-│   ├── llm.py               # Claude 호출 (유일한 진입점)
 │   ├── prompts.py           # 시스템 프롬프트 템플릿
 │   └── services.py          # RAG 오케스트레이션
 └── settings_app/
-    ├── models.py            # SystemSetting (싱글턴)
+    ├── models.py            # SystemSetting (싱글턴), LLMProviderConfig
     └── crypto.py            # Fernet 암복호화
 
 frontend/
@@ -105,4 +111,7 @@ frontend/
 | 회사/제품은 정규 테이블 + 별도 `KnowledgeChunk` 벡터 테이블 | CRUD 화면은 구조화 데이터로, 검색은 청크 단위로 분리 |
 | 채팅 응답은 SSE 스트리밍 | 긴 답변의 체감 대기 시간 감소 |
 | 인증은 DRF Token | SPA에서 단순, CSRF 이슈 없음 |
-| SystemSetting 싱글턴(pk=1) | API Key 등 전역 설정을 DB에 저장해야 한다는 요구 사항 |
+| SystemSetting 싱글턴(pk=1) | 전역 설정(사용할 LLM, RAG 튜닝 값)을 DB에 저장해야 한다는 요구 사항 |
+| LLM 공급자별 설정 행 + `backend/llm/` 공통 인터페이스 | 공급자를 바꿔도 키가 유지되고, 채팅 코드는 공급자를 몰라도 됨 |
+| ChatGPT·Gemini 모델은 공급자 모델 목록에서 선택 | 모델 ID가 자주 바뀌어 코드에 고정하면 낡음 |
+| 문서는 추출 텍스트만 DB 저장 | 원본 보관 요구 없음, 파일 저장소 불필요 |

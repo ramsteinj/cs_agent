@@ -7,13 +7,14 @@
 ```
 User (AbstractUser)
 
-Company 1 ──── N Product
+Company 1 ──── N Product 1 ──── N ProductDocument (txt/docx/pdf 추출 텍스트)
    │                 │
    └──── N KnowledgeChunk N ────┘   (source_type + source_id 로 참조)
 
 ChatSession 1 ──── N ChatMessage
 
-SystemSetting (singleton, pk=1)
+SystemSetting (singleton, pk=1) ── 사용할 LLM 공급자, 챗봇 표시, RAG 튜닝 설정
+LLMProviderConfig (공급자당 1행: anthropic / openai / gemini) ── 암호화된 API Key, 모델
 ```
 
 ## 2. accounts
@@ -55,12 +56,26 @@ SystemSetting (singleton, pk=1)
 | name | CharField(200) | 필수, (company, name) unique |
 | category | CharField(100) | 선택, db_index |
 | summary | CharField(500) | 선택 |
-| description | TextField | 필수 |
+| description | TextField | 선택 (직접 입력 또는 문서 업로드 중 하나 이상 — 프론트에서 검증) |
 | price | CharField(100) | 선택 (자유 텍스트) |
 | features | TextField | 선택 |
 | usage_guide | TextField | 선택 |
 | faq | TextField | 선택 |
 | is_active | BooleanField, default True | db_index |
+
+### ProductDocument (제품 정보 문서)
+업로드한 Text/MS Word/PDF 파일에서 **추출한 텍스트만** 저장한다 (원본 파일은 보관하지 않음).
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| product | FK(Product, CASCADE, related_name="documents") | |
+| file_name | CharField(255) | 원본 파일명 (경로 제거) |
+| file_type | CharField(choices: `txt`, `docx`, `pdf`) | |
+| file_size | PositiveIntegerField | 바이트 |
+| text | TextField | 추출 텍스트 (최대 200,000자) |
+
+- 제한: 파일 10MB 이하, `.doc`(구형 Word)·암호화 PDF·텍스트가 없는 스캔 PDF는 거부.
+- 색인: 제품 청크 생성 시 제품 필드 텍스트 다음에 문서별로 청킹한다 (specs/05 §2.1).
 
 ### KnowledgeChunk
 | 필드 | 타입 | 설명 |
@@ -72,7 +87,7 @@ SystemSetting (singleton, pk=1)
 | chunk_index | PositiveIntegerField | 출처 내 순번 |
 | content | TextField | 청크 원문 (프롬프트에 그대로 들어감) |
 | embedding | `pgvector.django.VectorField(dimensions=EMBEDDING_DIM)` | 기본 384 |
-| embedding_model | CharField(200) | 생성에 사용한 모델명 |
+| embedding_model | CharField(200) | 생성에 사용한 모델명 (SystemSetting.embedding_model, 테스트는 `fake`) |
 | is_searchable | BooleanField, default True | 비활성 제품이면 False |
 
 - 인덱스:
@@ -108,17 +123,37 @@ SystemSetting (singleton, pk=1)
 ## 5. settings_app
 
 ### SystemSetting (싱글턴)
-| 필드 | 타입 | 기본값 |
-|---|---|---|
-| id | 항상 1 | |
-| anthropic_api_key_encrypted | TextField(blank) | "" — Fernet 암호문 |
-| api_key_last4 | CharField(4, blank) | 마스킹 표시용 |
-| api_key_updated_at | DateTimeField(null) | |
-| claude_model | CharField(100) | `claude-opus-5-5` |
-| bot_name | CharField(100) | `고객지원 챗봇` |
-| welcome_message | TextField | `안녕하세요! 회사와 제품에 대해 궁금한 점을 물어보세요.` |
-| extra_instructions | TextField(max 2000, blank) | "" |
+| 필드 | 타입 | 기본값 | 설명 |
+|---|---|---|---|
+| id | 항상 1 | | |
+| llm_provider | CharField(choices: `anthropic`, `openai`, `gemini`) | `anthropic` | 챗봇이 사용할 LLM (Claude / ChatGPT / Gemini) |
+| bot_name | CharField(100) | `고객지원 챗봇` | |
+| welcome_message | TextField | `안녕하세요! 회사와 제품에 대해 궁금한 점을 물어보세요.` | |
+| extra_instructions | TextField(max 2000, blank) | "" | |
+| embedding_model | CharField(200) | `intfloat/multilingual-e5-small` | RAG: 임베딩 모델 (EMBEDDING_DIM 차원이어야 함) |
+| chunk_max_chars | PositiveIntegerField | 500 | RAG: 청크 최대 길이 (100~4000) |
+| chunk_overlap_chars | PositiveIntegerField | 100 | RAG: 청크 겹침 (0 이상, chunk_max_chars 미만) |
+| retrieval_top_k | PositiveIntegerField | 5 | RAG: 검색할 청크 수 (1~20) |
+| retrieval_max_distance | FloatField | 0.6 | RAG: 코사인 거리 상한 (0~2) |
+| search_with_previous_question | BooleanField | True | RAG: 검색어에 직전 질문 포함 |
+| history_messages | PositiveIntegerField | 10 | RAG: LLM에 보낼 이전 메시지 수 (0~50) |
+| max_sources | PositiveIntegerField | 3 | RAG: 답변 아래 표시할 출처 수 (0~10) |
+| llm_max_output_tokens | PositiveIntegerField | 4096 | 답변 최대 출력 토큰 (256~32000) |
 
 - 클래스 메서드 `SystemSetting.load()` → `get_or_create(pk=1)`
 - `save()` 에서 pk를 1로 고정, `delete()` 금지
-- 메서드 `set_api_key(plain)`, `get_api_key() -> str | None`, `clear_api_key()`, 프로퍼티 `chatbot_enabled`
+- 프로퍼티 `active_provider_config` (llm_provider의 LLMProviderConfig), `chatbot_enabled` (선택된 공급자의 키와 모델이 모두 설정됨)
+- 환경 변수로 남는 값: `EMBEDDING_BACKEND`(테스트용 fake), `EMBEDDING_DIM`(DB 스키마), 입력 길이·요청 횟수 제한(보안 설정, specs/07)
+
+### LLMProviderConfig (공급자별 1행)
+| 필드 | 타입 | 기본값 |
+|---|---|---|
+| provider | CharField(choices: `anthropic`, `openai`, `gemini`), unique | |
+| api_key_encrypted | TextField(blank) | "" — Fernet 암호문 |
+| api_key_hint | CharField(32, blank) | 마스킹 표시용 (예: `sk-ant-...abcd`) |
+| api_key_updated_at | DateTimeField(null) | |
+| model | CharField(100, blank) | anthropic: `claude-opus-5-5`, openai/gemini: "" (관리자가 목록에서 선택) |
+
+- `LLMProviderConfig.get(provider)` → `get_or_create` (기본 모델 적용)
+- 메서드 `set_api_key(plain)`, `get_api_key() -> str | None`(복호화 실패 시 None), `clear_api_key()`, 프로퍼티 `api_key_configured`, `ready`(키와 모델 모두 있음)
+- 공급자를 바꿔도 다른 공급자의 키와 모델은 그대로 유지된다.

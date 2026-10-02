@@ -24,8 +24,9 @@ RAG 기반 Customer Support Chatbot (`cs_agent`). 이 파일은 Claude Code가 �
 - Frontend: Vue.js 3 (Composition API, `<script setup>`), Vite, Bootstrap 5.0, HTML5/CSS3, SPA
 - Backend: Python 3.12, Django 5.x, Django ORM, Django REST Framework
 - Database: PostgreSQL 18 (로컬 설치, 포트 5432) + pgvector (`pgvector` Python 패키지의 `VectorField`)
-- LLM: Anthropic Claude API (공식 `anthropic` Python SDK). API Key는 관리자 화면에서 입력 → DB에 암호화 저장
-- Embedding: 로컬 `sentence-transformers` 모델 (Claude API는 임베딩을 제공하지 않음) — 상세는 specs/05
+- LLM: ChatGPT(`openai`), Claude(`anthropic`), Gemini(`google-genai`) 공식 SDK 중 관리자가 하나를 선택. API Key는 공급자별로 관리자 화면에서 입력 → DB에 암호화 저장. Claude 기본 모델 `claude-opus-5-5`
+- 문서 추출: `python-docx`(.docx), `pypdf`(.pdf)
+- Embedding: 로컬 `sentence-transformers` 모델 (LLM 공급자와 무관하게 동작) — 모델과 RAG 튜닝 값은 DB(SystemSetting)에서 관리, 상세는 specs/05
 
 ## 디렉터리 구조
 
@@ -38,9 +39,10 @@ cs_agent/
 │   ├── manage.py
 │   ├── config/               # settings, urls, wsgi/asgi
 │   ├── accounts/             # User(AbstractUser), 로그인, 기본 관리자 생성
-│   ├── knowledge/            # Company, Product, KnowledgeChunk(pgvector), 임베딩
-│   ├── chat/                 # 챗봇 API, RAG 파이프라인, Claude 연동
-│   ├── settings_app/         # SystemSetting(API Key 등)
+│   ├── knowledge/            # Company, Product, ProductDocument, KnowledgeChunk(pgvector), 임베딩, 문서 추출
+│   ├── llm/                  # LLM 공급자(Claude/ChatGPT/Gemini) — 유일한 LLM 호출 지점
+│   ├── chat/                 # 챗봇 API, RAG 파이프라인
+│   ├── settings_app/         # SystemSetting(LLM 선택·RAG 설정), LLMProviderConfig(공급자별 키·모델)
 │   └── requirements.txt
 └── frontend/                 # Vue 3 + Vite SPA
     ├── package.json
@@ -82,9 +84,10 @@ npm run build
 - 모든 API는 `/api/` 하위, JSON 입출력. 에러 응답 형식은 specs/04의 공통 에러 포맷을 따른다.
 - 사용자 모델은 `accounts.User`(AbstractUser 상속). `AUTH_USER_MODEL = "accounts.User"`는 **첫 마이그레이션 전에** 설정한다.
 - 권한: 관리자 API는 `IsAdminRole` 권한 클래스, 챗봇 API는 `AllowAny` + rate limit.
-- Claude 호출은 `chat/llm.py` 한 곳에서만 한다. 모델 ID는 SystemSetting 값을 사용하고 하드코딩하지 않는다(기본값 `claude-opus-5-5`).
+- LLM 호출은 `backend/llm/` 패키지에서만 한다. 공급자 SDK를 다른 곳에서 import하지 않는다. 모델 ID는 LLMProviderConfig 값을 사용하고 하드코딩하지 않는다(Claude 기본값 `claude-opus-5-5`).
+- RAG 튜닝 값(청크, 검색, 대화 기록, 출력 토큰, 임베딩 모델)은 SystemSetting에서 읽는다. settings.py나 상수로 되돌리지 않는다.
 - 임베딩 생성은 `knowledge/embeddings.py` 한 곳에서만 한다. 모델 로딩은 프로세스당 1회(lazy singleton).
-- Company/Product 생성·수정·삭제 시 같은 트랜잭션 안에서 KnowledgeChunk를 재생성/삭제한다.
+- Company/Product/ProductDocument 생성·수정·삭제 시 같은 트랜잭션 안에서 KnowledgeChunk를 재생성/삭제한다.
 
 ### Frontend (Vue 3)
 - Composition API + `<script setup>`만 사용. 상태 관리는 Pinia, 라우팅은 Vue Router, HTTP는 `src/api/` 의 axios 인스턴스 하나로 통일.
@@ -102,5 +105,5 @@ README.md는 **필요할 때마다 업데이트**한다. 다음 중 하나라도
 ## 하지 말 것
 - specs에 없는 기능을 임의로 추가하지 않는다 (필요하면 제안만).
 - 기본 관리자 비밀번호(`admin1234!`)를 프론트엔드나 로그에 노출하지 않는다.
-- 프론트엔드에서 Claude API를 직접 호출하지 않는다. API Key는 브라우저로 내려가지 않는다(마스킹 값만).
+- 프론트엔드에서 LLM API를 직접 호출하지 않는다. API Key는 브라우저로 내려가지 않는다(마스킹 값만).
 - `--no-verify`, 테스트 skip, 마이그레이션 파일 수동 삭제 금지.
