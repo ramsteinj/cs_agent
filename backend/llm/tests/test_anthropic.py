@@ -188,10 +188,25 @@ def test_temperature_sent_only_when_supported(client_cls):
     stream = _stream_returns(client_cls, [], _final())
 
     run(provider.stream_reply("key", "claude-haiku-4-5", "sys", [], 512, temperature=0.3))
-    assert stream.call_args.kwargs["temperature"] == 0.3
+    assert stream.call_args.kwargs["extra_body"] == {"temperature": 0.3}
 
     run(provider.stream_reply("key", "claude-opus-5-5", "sys", [], 512, temperature=0.3))
-    assert "temperature" not in stream.call_args.kwargs
+    assert "extra_body" not in stream.call_args.kwargs
 
     run(provider.stream_reply("key", "claude-haiku-4-5", "sys", [], 512, temperature=None))
-    assert "temperature" not in stream.call_args.kwargs
+    assert "extra_body" not in stream.call_args.kwargs
+
+
+@pytest.mark.parametrize(
+    ("model", "temperature"),
+    [("claude-opus-5-5", None), ("claude-haiku-4-5", 0.3), ("claude-sonnet-5-5", 0.9)],
+)
+def test_request_params_match_the_real_sdk_signature(model, temperature):
+    """Mocks accept any kwarg; bind against the real SDK method so a removed or renamed
+    parameter (like `temperature` in anthropic 1.x) fails here instead of in production."""
+    import inspect
+
+    from anthropic.resources.beta.messages import Messages
+
+    params = provider._params(model, "sys", [{"role": "user", "content": "q"}], 512, temperature)
+    inspect.signature(Messages.stream).bind(None, **params)

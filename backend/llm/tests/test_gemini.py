@@ -156,3 +156,15 @@ def test_no_temperature_means_model_default(client_cls):
     run(provider.stream_reply("key", "gemini-test-pro", "sys", [], 512))
 
     assert stream.call_args.kwargs["config"].temperature is None
+
+
+def test_request_params_match_the_real_sdk_signature(client_cls):
+    import inspect
+
+    from google.genai.models import Models
+
+    stream = client_cls.return_value.models.generate_content_stream
+    stream.return_value = iter([_chunk("a", finish="STOP")])
+    run(provider.stream_reply("key", "gemini-test-pro", "sys", [], 512, temperature=0.7))
+
+    inspect.signature(Models.generate_content_stream).bind(None, **stream.call_args.kwargs)

@@ -177,3 +177,20 @@ def test_temperature_sent_only_when_supported(client_cls):
 
     run(provider.stream_reply("key", "o4-mini", "sys", [], 256, temperature=1.4))
     assert "temperature" not in stream.call_args.kwargs
+
+
+@pytest.mark.parametrize(("model", "temperature"), [("gpt-4.1", 0.5), ("o4-mini", 0.5)])
+def test_request_params_match_the_real_sdk_signature(client_cls, model, temperature):
+    """Bind the kwargs we send against the real Responses.stream signature."""
+    import inspect
+
+    from openai.resources.responses import Responses
+
+    stream = _stream_returns(client_cls, [], _final())
+    run(
+        provider.stream_reply(
+            "key", model, "sys", [{"role": "user", "content": "q"}], 256, temperature=temperature
+        )
+    )
+
+    inspect.signature(Responses.stream).bind(None, **stream.call_args.kwargs)

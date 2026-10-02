@@ -81,7 +81,9 @@ class AnthropicProvider(Provider):
         }
         temperature = self.effective_temperature(model, temperature)
         if temperature is not None:
-            params["temperature"] = temperature
+            # The SDK no longer types sampling params (current models reject them), but
+            # older models such as Haiku 4.5 still accept them: send via extra_body.
+            params["extra_body"] = {"temperature": temperature}
         if model in EFFORT_MODELS:
             params["output_config"] = {"effort": EFFORT}
         if model in FALLBACK_MODELS:
